@@ -55,7 +55,7 @@ function EditUserDialog({
   onSave: (data: { role: string; is_active: number }) => void;
   isSaving: boolean;
 }) {
-  const [role, setRole] = useState(user?.role || "member");
+  const [role, setRole] = useState<string>(user?.role || "member");
   const [isActive, setIsActive] = useState(user?.is_active ?? 1);
 
   // Reset when user changes
