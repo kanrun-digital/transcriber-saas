@@ -9,13 +9,13 @@ import { AppHeader } from "@/components/layout/app-header";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { user, isLoading } = useAuth();
+  const { sessionUser, isLoading } = useAuth();
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (!isLoading && !sessionUser) {
       router.replace("/login");
     }
-  }, [user, isLoading, router]);
+  }, [sessionUser, isLoading, router]);
 
   if (isLoading) {
     return (
@@ -28,7 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user) return null;
+  if (!sessionUser) return null;
 
   return (
     <SidebarProvider>
