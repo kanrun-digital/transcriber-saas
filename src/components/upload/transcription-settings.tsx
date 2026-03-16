@@ -129,3 +129,5 @@ export function TranscriptionSettingsPanel({
     </Card>
   );
 }
+
+export const TranscriptionSettings = TranscriptionSettingsPanel;
