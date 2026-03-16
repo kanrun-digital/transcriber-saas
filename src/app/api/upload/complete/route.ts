@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as ncb from "@/lib/ncb";
-import { fileExists, getFileUrl } from "@/lib/s3";
+import { fileExists, getDownloadUrl } from "@/lib/s3";
 import { createTranscriptionJob } from "@/lib/salad";
 import { checkTranscriptionLimit } from "@/lib/usage";
 
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Presigned download URL for Salad (2 hours)
-    const downloadUrl = await getFileUrl(tx.storage_path, 7200);
+    const downloadUrl = await getDownloadUrl(tx.storage_path, 7200);
 
     // 6. Create Salad job
     const saladMode = mode || "full";
