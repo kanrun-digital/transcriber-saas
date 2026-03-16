@@ -19,7 +19,8 @@ import { Label } from "@/components/ui/label";
 import { Upload as UploadIcon, Link2, Mic, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Preset } from "@/types";
-import { LANGUAGES } from "@/constants/languages";
+import { FULL_MODE_LANGUAGES } from "@/constants/languages";
+
 
 type UploadMode = "file" | "url" | "voice";
 
@@ -86,7 +87,8 @@ export default function UploadPage() {
     toast.success(`Пресет "${preset.name}" застосовано`);
   };
 
-  const languages = LANGUAGES.map(l => ({ value: l.code, label: l.name }));
+  const languages = FULL_MODE_LANGUAGES as { value: string; label: string }[];
+
   const diarizationAvailable = !isLiteMode;
 
   return (
