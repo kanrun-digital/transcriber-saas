@@ -130,4 +130,4 @@ export function TranscriptionSettingsPanel({
   );
 }
 
-export const TranscriptionSettings = TranscriptionSettingsPanel;
+export { TranscriptionSettingsPanel as TranscriptionSettingsComponent };
