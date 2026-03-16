@@ -2,29 +2,22 @@
 
 import { cn } from "@/lib/utils";
 import { Bot, User } from "lucide-react";
-import type { Message, RagReference } from "@/types";
+import type { RagReference } from "@/types";
 
 interface ChatMessageProps {
-  message: Message;
+  role: "user" | "assistant" | "system" | "tool";
+  content: string;
+  references?: RagReference[];
+  onReferencesClick?: () => void;
   onSourceClick?: (ref: RagReference) => void;
 }
 
-export function ChatMessage({ message, onSourceClick }: ChatMessageProps) {
-  const isUser = message.role === "user";
-  const isError = message.is_error === 1;
-
-  let references: RagReference[] = [];
-  if (message.rag_references_json) {
-    try {
-      references = JSON.parse(message.rag_references_json);
-    } catch {
-      // invalid JSON
-    }
-  }
+export function ChatMessage({ role, content, references, onReferencesClick, onSourceClick }: ChatMessageProps) {
+  const isUser = role === "user";
 
   return (
     <div
-      className={cn("flex gap-3 py-3", isUser ? "flex-row-reverse" : "flex-row")}
+      className={cn("flex gap-3 py-3 px-4", isUser ? "flex-row-reverse" : "flex-row")}
     >
       <div
         className={cn(
@@ -40,28 +33,21 @@ export function ChatMessage({ message, onSourceClick }: ChatMessageProps) {
           "max-w-[80%] rounded-lg px-4 py-2 text-sm",
           isUser
             ? "bg-primary text-primary-foreground"
-            : isError
-              ? "bg-destructive/10 border border-destructive/20"
-              : "bg-muted"
+            : "bg-muted"
         )}
       >
         <div className="whitespace-pre-wrap break-words">
-          {message.content_text || ""}
+          {content}
         </div>
 
-        {references.length > 0 && (
+        {references && references.length > 0 && (
           <div className="mt-2 pt-2 border-t border-current/10 space-y-1">
-            <p className="text-xs font-medium opacity-70">Джерела:</p>
-            {references.map((ref, i) => (
-              <button
-                key={i}
-                className="block text-xs underline opacity-70 hover:opacity-100 text-left"
-                onClick={() => onSourceClick?.(ref)}
-              >
-                📄 {ref.file_name} ({Math.floor(ref.start_seconds / 60)}:{String(Math.floor(ref.start_seconds % 60)).padStart(2, "0")} - {Math.floor(ref.end_seconds / 60)}:{String(Math.floor(ref.end_seconds % 60)).padStart(2, "0")})
-                {ref.speaker && ` — ${ref.speaker}`}
-              </button>
-            ))}
+            <button
+              className="text-xs font-medium opacity-70 hover:opacity-100"
+              onClick={onReferencesClick}
+            >
+              📄 {references.length} джерел(а)
+            </button>
           </div>
         )}
       </div>
