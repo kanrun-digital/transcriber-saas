@@ -1,0 +1,9 @@
+{
+  "name": "Transcriber SaaS",
+  "short_name": "Transcriber",
+  "description": "Audio/video transcription with AI-powered RAG chat",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b"
+}

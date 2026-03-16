@@ -1,0 +1,28 @@
+services:
+  transcriber-api:
+    build: .
+    container_name: transcriber-api
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - NCB_INSTANCE=${NCB_INSTANCE:-55446_crm_transcriber_system}
+      - NCB_AUTH_URL=${NCB_AUTH_URL:-https://app.nocodebackend.com/api/user-auth}
+      - NCB_DATA_URL=${NCB_DATA_URL:-https://openapi.nocodebackend.com}
+      - NCB_SECRET_KEY=${NCB_SECRET_KEY}
+      - S3_ENDPOINT=${S3_ENDPOINT:-https://eu2.contabostorage.com}
+      - S3_BUCKET=${S3_BUCKET:-transcriber-files}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_REGION=${S3_REGION:-EU}
+      - SALAD_API_KEY=${SALAD_API_KEY}
+      - SALAD_ORG_NAME=${SALAD_ORG_NAME}
+      - STRAICO_API_KEY=${STRAICO_API_KEY}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+    ports:
+      - "3100:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/auth/session"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
