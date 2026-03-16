@@ -4,13 +4,6 @@ const NCB_AUTH_URL = process.env.NCB_AUTH_URL || "https://app.nocodebackend.com/
 const NCB_INSTANCE = process.env.NCB_INSTANCE!;
 const NCB_SECRET = process.env.NCB_SECRET_KEY!;
 
-/**
- * Auth proxy: /api/auth/[...path]
- * 
- * Proxies all auth requests to NCB auth API.
- * Handles: sign-in, sign-up, sign-out, get-session, email-otp, etc.
- */
-
 async function proxyAuth(req: NextRequest, path: string) {
   const url = `${NCB_AUTH_URL}/${path}`;
 
@@ -19,11 +12,9 @@ async function proxyAuth(req: NextRequest, path: string) {
     Authorization: `Bearer ${NCB_SECRET}`,
   };
 
-  // Forward content-type
   const ct = req.headers.get("content-type");
   if (ct) headers["Content-Type"] = ct;
 
-  // Forward cookies
   const cookie = req.headers.get("cookie");
   if (cookie) headers["Cookie"] = cookie;
 
@@ -32,21 +23,18 @@ async function proxyAuth(req: NextRequest, path: string) {
     headers,
   };
 
-  // Forward body for POST/PUT
   if (req.method !== "GET" && req.method !== "HEAD") {
     fetchOptions.body = await req.text();
   }
 
   const res = await fetch(url, fetchOptions);
 
-  // Build response
   const body = await res.text();
   const response = new NextResponse(body, {
     status: res.status,
     headers: { "Content-Type": res.headers.get("Content-Type") || "application/json" },
   });
 
-  // Forward Set-Cookie headers (critical for auth)
   const setCookies = res.headers.getSetCookie?.() || [];
   for (const sc of setCookies) {
     response.headers.append("Set-Cookie", sc);
