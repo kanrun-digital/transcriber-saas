@@ -35,7 +35,7 @@ export default function TranscriptionDetailPage() {
   });
 
   const syncRagMutation = useMutation({
-    mutationFn: () => transcriptionsService.syncRag(Number(id), txData?.workspace_id || 0),
+    mutationFn: () => transcriptionsService.syncRag(Number(id), tx?.workspace_id || 0),
     onSuccess: () => {
       toast.success("RAG індексація запущена");
       queryClient.invalidateQueries({ queryKey: ["transcription", id] });
