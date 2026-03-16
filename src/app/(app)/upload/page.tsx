@@ -37,13 +37,12 @@ export default function UploadPage() {
   const isDone = phase === "done";
   const isError = phase === "error";
 
-  const handleFileSelect = async (selectedFile: File) => {
-    await startUpload(selectedFile);
+  const handleFileSelect = (selectedFile: File) => {
+    startUpload(selectedFile);
   };
 
   const handleStartTranscription = async () => {
     if (!transcriptionId || !workspace) return;
-
     try {
       const res = await fetch("/api/upload/complete", {
         method: "POST",
@@ -56,12 +55,10 @@ export default function UploadPage() {
           languageCode: settings.language,
         }),
       });
-
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || "Помилка створення задачі");
       }
-
       toast.success("Транскрипція запущена!");
       router.push(`/transcriptions/${transcriptionId}`);
     } catch (err: any) {
@@ -70,10 +67,7 @@ export default function UploadPage() {
   };
 
   const handlePresetApply = (preset: Preset | null) => {
-    if (!preset) {
-      setActivePresetName(null);
-      return;
-    }
+    if (!preset) { setActivePresetName(null); return; }
     if (preset.settings_json) {
       try {
         const config = typeof preset.settings_json === "string"
@@ -89,12 +83,8 @@ export default function UploadPage() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Завантаження файлу</h1>
-        <p className="text-muted-foreground">
-          Виберіть спосіб завантаження та налаштуйте параметри транскрипції
-        </p>
-        {activePresetName && (
-          <Badge variant="secondary" className="mt-2">Пресет: {activePresetName}</Badge>
-        )}
+        <p className="text-muted-foreground">Виберіть спосіб завантаження та налаштуйте параметри транскрипції</p>
+        {activePresetName && <Badge variant="secondary" className="mt-2">Пресет: {activePresetName}</Badge>}
       </div>
 
       {phase === "idle" && (
@@ -107,24 +97,18 @@ export default function UploadPage() {
                 <TabsTrigger value="url"><Link2 className="w-4 h-4 mr-2" />URL</TabsTrigger>
                 <TabsTrigger value="voice"><Mic className="w-4 h-4 mr-2" />Голос</TabsTrigger>
               </TabsList>
-
               <TabsContent value="file" className="space-y-4 mt-4">
-                <FileDropzone onFileSelected={handleFileSelect} />
+                <FileDropzone onFileSelect={handleFileSelect} file={file} onClear={reset} />
               </TabsContent>
-
               <TabsContent value="url" className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label>URL адреса</Label>
                   <div className="flex gap-2">
-                    <Input value={urlInput} onChange={(e) => setUrlInput(e.target.value)}
-                      placeholder="https://example.com/file.mp3" />
-                    <Button variant="secondary" onClick={() => {
-                      if (urlInput.trim()) toast.info("URL завантаження — скоро");
-                    }}>Перевірити</Button>
+                    <Input value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="https://example.com/file.mp3" />
+                    <Button variant="secondary" onClick={() => { if (urlInput.trim()) toast.info("URL завантаження — скоро"); }}>Перевірити</Button>
                   </div>
                 </div>
               </TabsContent>
-
               <TabsContent value="voice" className="py-12 text-center mt-4">
                 <Mic className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
                 <p className="text-muted-foreground">Запис голосу — скоро</p>
@@ -135,24 +119,12 @@ export default function UploadPage() {
       )}
 
       {(isUploading || isError) && (
-        <UploadProgress
-          phase={phase}
-          progress={progress}
-          error={error}
-          fileName={file?.name || ""}
-          onCancel={cancelUpload}
-        />
+        <UploadProgress phase={phase} progress={progress} error={error} fileName={file?.name || ""} onCancel={cancelUpload} onReset={reset} />
       )}
 
       {isDone && (
         <>
-          <Alert>
-            <CheckCircle2 className="h-4 w-4" />
-            <AlertDescription>
-              Файл <strong>{file?.name}</strong> завантажено!
-            </AlertDescription>
-          </Alert>
-
+          <Alert><CheckCircle2 className="h-4 w-4" /><AlertDescription>Файл <strong>{file?.name}</strong> завантажено!</AlertDescription></Alert>
           <Card>
             <CardHeader><CardTitle>Крок 2: Налаштування</CardTitle></CardHeader>
             <CardContent className="space-y-6">
@@ -160,19 +132,10 @@ export default function UploadPage() {
                 <Label className="text-base font-semibold">Пресети</Label>
                 <PresetSelector onPresetSelect={handlePresetApply} />
               </div>
-
-              <TranscriptionSettingsPanel
-                settings={settings}
-                languages={languages as { value: string; label: string }[]}
-                diarizationAvailable={diarizationAvailable}
-                onUpdate={updateSetting}
-              />
-
+              <TranscriptionSettingsPanel settings={settings} languages={languages as { value: string; label: string }[]} diarizationAvailable={diarizationAvailable} onUpdate={updateSetting} />
               <div className="flex gap-2 pt-4">
                 <Button variant="outline" onClick={reset}>Назад</Button>
-                <Button onClick={handleStartTranscription} className="flex-1">
-                  Почати транскрипцію
-                </Button>
+                <Button onClick={handleStartTranscription} className="flex-1">Почати транскрипцію</Button>
               </div>
             </CardContent>
           </Card>
