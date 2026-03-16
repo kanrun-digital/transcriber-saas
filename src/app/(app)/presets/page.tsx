@@ -9,9 +9,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Globe, User, FileText, Zap } from "lucide-react";
 
 export default function PresetsPage() {
-  const { presets, isLoading } = usePresets();
-  const publicPresets = presets?.filter(p => p.is_public) || [];
-  const myPresets = presets?.filter(p => !p.is_public) || [];
+  const { data, isLoading } = usePresets();
+const presets = data?.data || [];
+const publicPresets = presets.filter(p => p.is_public);
+const myPresets = presets.filter(p => !p.is_public);
+
 
   return (
     <div className="space-y-6">
@@ -24,8 +26,8 @@ export default function PresetsPage() {
         {[
           { label: "Публічні", value: publicPresets.length, icon: Globe },
           { label: "Мої", value: myPresets.length, icon: User },
-          { label: "Full", value: presets?.filter(p => p.transcription_type === "full").length || 0, icon: FileText },
-          { label: "Lite", value: presets?.filter(p => p.transcription_type === "lite").length || 0, icon: Zap },
+          { label: "Full", value: presets.filter(p => p.transcription_type === "full").length, icon: FileText },
+{ label: "Lite", value: presets.filter(p => p.transcription_type === "lite").length, icon: Zap },
         ].map(({ label, value, icon: Icon }) => (
           <Card key={label}>
             <CardHeader className="flex flex-row items-center justify-between py-3 px-4">
