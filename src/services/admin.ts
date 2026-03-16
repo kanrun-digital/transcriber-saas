@@ -1,10 +1,8 @@
-import { apiGet } from "./api-client";
+import { apiGet, apiPut, apiDelete } from "./api-client";
 import { API_ROUTES } from "@/constants/routes";
-import type { AdminStats, PaginatedResponse, Transcription, AppUser } from "@/types";
+import type { PaginatedResponse, Transcription, AppUser, Workspace } from "@/types";
 
-export async function getAdminStats(workspaceId: number): Promise<AdminStats> {
-  return apiGet<AdminStats>(API_ROUTES.ADMIN_STATS, { workspaceId });
-}
+// ============ Users ============
 
 export async function listAllUsers(workspaceId: number): Promise<PaginatedResponse<AppUser>> {
   return apiGet<PaginatedResponse<AppUser>>(API_ROUTES.DATA("app_users"), {
@@ -14,6 +12,19 @@ export async function listAllUsers(workspaceId: number): Promise<PaginatedRespon
     order: "desc",
   });
 }
+
+export async function updateUser(
+  userId: number,
+  data: { role?: string; is_active?: number; name?: string }
+): Promise<void> {
+  return apiPut(API_ROUTES.DATA_RECORD("app_users", userId), data);
+}
+
+export async function deleteUser(userId: number): Promise<void> {
+  return apiDelete(API_ROUTES.DATA_RECORD("app_users", userId));
+}
+
+// ============ Transcriptions ============
 
 export async function listAllTranscriptions(
   workspaceId: number,
@@ -27,4 +38,21 @@ export async function listAllTranscriptions(
     sort: "created_at",
     order: "desc",
   });
+}
+
+export async function deleteTranscription(txId: number): Promise<void> {
+  return apiDelete(API_ROUTES.DATA_RECORD("transcriptions", txId));
+}
+
+// ============ Workspaces ============
+
+export async function updateWorkspace(
+  workspaceId: number,
+  data: Partial<Pick<Workspace,
+    "name" | "plan" | "status" | "salad_minutes_limit" | "straico_coins_limit" |
+    "max_file_size_mb" | "max_storage_gb" | "max_rag_bases" | "max_agents" |
+    "max_members" | "max_transcriptions" | "default_salad_mode"
+  >>
+): Promise<void> {
+  return apiPut(API_ROUTES.DATA_RECORD("workspaces", workspaceId), data);
 }
