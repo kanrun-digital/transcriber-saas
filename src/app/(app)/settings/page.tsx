@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Settings, User } from "lucide-react";
 
 export default function SettingsPage() {
-  const { user } = useAuthStore();
+  const { sessionUser } = useAuthStore();
   const { workspace } = useWorkspace();
 
   return (
@@ -25,11 +25,11 @@ export default function SettingsPage() {
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-muted-foreground">Email</span>
-              <p className="font-medium">{user?.email || "—"}</p>
+              <p className="font-medium">{sessionUser?.email || "—"}</p>
             </div>
             <div>
               <span className="text-muted-foreground">Ім'я</span>
-              <p className="font-medium">{user?.name || "—"}</p>
+              <p className="font-medium">{sessionUser?.name || "—"}</p>
             </div>
           </div>
         </CardContent>
