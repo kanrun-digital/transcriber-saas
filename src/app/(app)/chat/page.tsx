@@ -89,7 +89,8 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        <ChatInput onSend={handleSend} disabled={queryMutation.isPending || !workspace} />
+        <ChatInput onSend={handleSend} isLoading={queryMutation.isPending} disabled={!workspace} />
+
       </div>
 
       {/* Sources panel */}
