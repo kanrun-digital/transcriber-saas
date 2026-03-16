@@ -55,10 +55,12 @@ async function proxyAuth(req: NextRequest, path: string) {
   return response;
 }
 
-export async function GET(req: NextRequest, { params }: { params: { path: string[] } }) {
-  return proxyAuth(req, params.path.join("/"));
+export async function GET(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  const { path } = await params;
+  return proxyAuth(req, path.join("/"));
 }
 
-export async function POST(req: NextRequest, { params }: { params: { path: string[] } }) {
-  return proxyAuth(req, params.path.join("/"));
+export async function POST(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  const { path } = await params;
+  return proxyAuth(req, path.join("/"));
 }
