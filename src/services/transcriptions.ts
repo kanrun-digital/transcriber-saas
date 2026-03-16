@@ -46,3 +46,11 @@ export interface ArtifactUrls {
 export async function getArtifactUrls(transcriptionId: number): Promise<ArtifactUrls> {
   return apiGet<ArtifactUrls>(API_ROUTES.TRANSCRIPTION_ARTIFACTS(transcriptionId));
 }
+
+export const transcriptionsService = {
+  list: listTranscriptions,
+  getById: getTranscription,
+  delete: deleteTranscription,
+  syncRag,
+  getArtifactUrls,
+};
