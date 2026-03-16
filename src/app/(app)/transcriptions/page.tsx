@@ -15,17 +15,18 @@ export default function TranscriptionsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const isMobile = useIsMobile();
-  const { transcriptions, isLoading } = useTranscriptions({ status: statusFilter === "all" ? undefined : statusFilter });
+  const { data, isLoading } = useTranscriptions({ status: statusFilter === "all" ? undefined : statusFilter });
+  const transcriptions = data?.data || [];
 
-  const filtered = transcriptions?.filter(t =>
+  const filtered = transcriptions.filter(t =>
     (t.original_filename || "").toLowerCase().includes(search.toLowerCase())
-  ) || [];
+  );
 
   const stats = {
-    total: transcriptions?.length || 0,
-    completed: transcriptions?.filter(t => t.status === TRANSCRIPTION_STATUS.COMPLETED).length || 0,
-    processing: transcriptions?.filter(t => t.status === TRANSCRIPTION_STATUS.TRANSCRIBING).length || 0,
-    failed: transcriptions?.filter(t => t.status === TRANSCRIPTION_STATUS.FAILED).length || 0,
+    total: transcriptions.length,
+    completed: transcriptions.filter(t => t.status === TRANSCRIPTION_STATUS.COMPLETED).length,
+    processing: transcriptions.filter(t => t.status === TRANSCRIPTION_STATUS.TRANSCRIBING).length,
+    failed: transcriptions.filter(t => t.status === TRANSCRIPTION_STATUS.FAILED).length,
   };
 
   return (
@@ -35,7 +36,6 @@ export default function TranscriptionsPage() {
         <p className="text-muted-foreground">Всі ваші аудіо та відео файли</p>
       </div>
 
-      {/* Stats */}
       {!isMobile && (
         <div className="grid grid-cols-4 gap-4">
           {[
@@ -57,7 +57,6 @@ export default function TranscriptionsPage() {
         </div>
       )}
 
-      {/* Filters */}
       <div className={`flex gap-3 ${isMobile ? "flex-col" : "items-center justify-between"}`}>
         <Tabs value={statusFilter} onValueChange={setStatusFilter}>
           <TabsList className={isMobile ? "w-full grid grid-cols-4" : ""}>
@@ -75,7 +74,6 @@ export default function TranscriptionsPage() {
         </div>
       </div>
 
-      {/* Content */}
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Завантаження...</div>
       ) : filtered.length === 0 ? (
