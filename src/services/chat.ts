@@ -27,3 +27,10 @@ export async function listMessages(conversationId: number): Promise<PaginatedRes
     limit: 200,
   });
 }
+
+export const chatService = {
+  queryRag,
+  listConversations,
+  getConversation,
+  listMessages,
+};
