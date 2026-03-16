@@ -7,10 +7,11 @@ import type { RagReference } from "@/types";
 
 interface SourcesPanelProps {
   references: RagReference[];
+  onClose?: () => void;
   onSourceClick?: (ref: RagReference) => void;
 }
 
-export function SourcesPanel({ references, onSourceClick }: SourcesPanelProps) {
+export function SourcesPanel({ references, onSourceClick, onClose }: SourcesPanelProps) {
   if (references.length === 0) {
     return (
       <Card>
@@ -28,9 +29,11 @@ export function SourcesPanel({ references, onSourceClick }: SourcesPanelProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-sm">Джерела ({references.length})</CardTitle>
-      </CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-sm">Джерела ({references.length})</CardTitle>
+          {onClose && <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm">✕</button>}
+        </CardHeader>
+
       <CardContent className="p-0">
         <ScrollArea className="h-[400px]">
           <div className="space-y-2 p-4">
