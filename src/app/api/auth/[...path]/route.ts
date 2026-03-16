@@ -4,8 +4,29 @@ const NCB_AUTH_URL = process.env.NCB_AUTH_URL || "https://app.nocodebackend.com/
 const NCB_INSTANCE = process.env.NCB_INSTANCE!;
 const NCB_SECRET = process.env.NCB_SECRET_KEY!;
 
+/**
+ * Map frontend paths to NCB Auth API paths:
+ *   sign-up   → sign-up/email
+ *   sign-in   → sign-in/email
+ *   session   → get-session
+ *   sign-out  → sign-out
+ */
+function mapAuthPath(path: string): string {
+  switch (path) {
+    case "sign-up":
+      return "sign-up/email";
+    case "sign-in":
+      return "sign-in/email";
+    case "session":
+      return "get-session";
+    default:
+      return path;
+  }
+}
+
 async function proxyAuth(req: NextRequest, path: string) {
-  const url = `${NCB_AUTH_URL}/${path}`;
+  const mappedPath = mapAuthPath(path);
+  const url = `${NCB_AUTH_URL}/${mappedPath}`;
 
   const headers: Record<string, string> = {
     "X-Database-Instance": NCB_INSTANCE,
