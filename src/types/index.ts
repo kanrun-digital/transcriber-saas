@@ -132,6 +132,8 @@ export interface Preset {
   transcription_type: SaladMode;
   settings_json: string;
   is_default: number;
+  is_public: number;
+  app_user_id: number | null;
   created_at: string | null;
   updated_at: string | null;
 }
