@@ -4,13 +4,6 @@ const NCB_AUTH_URL = process.env.NCB_AUTH_URL || "https://app.nocodebackend.com/
 const NCB_INSTANCE = process.env.NCB_INSTANCE!;
 const NCB_SECRET = process.env.NCB_SECRET_KEY!;
 
-/**
- * Map frontend paths to NCB Auth API paths:
- *   sign-up   → sign-up/email
- *   sign-in   → sign-in/email
- *   session   → get-session
- *   sign-out  → sign-out
- */
 function mapAuthPath(path: string): string {
   switch (path) {
     case "sign-up":
@@ -38,6 +31,11 @@ async function proxyAuth(req: NextRequest, path: string) {
 
   const cookie = req.headers.get("cookie");
   if (cookie) headers["Cookie"] = cookie;
+
+  // NCB requires Origin header — forward from client or use app URL
+  const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
+  headers["Origin"] = origin;
+  headers["Referer"] = origin + "/";
 
   const fetchOptions: RequestInit = {
     method: req.method,
