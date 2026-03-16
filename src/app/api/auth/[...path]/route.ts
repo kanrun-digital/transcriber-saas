@@ -17,6 +17,21 @@ function mapAuthPath(path: string): string {
   }
 }
 
+/**
+ * Rewrite NCB cookies to work on our domain:
+ * - Remove Domain=app.nocodebackend.com
+ * - Remove __Secure- prefix (requires exact domain match)
+ * - Remove Secure in development
+ */
+function rewriteCookie(cookie: string): string {
+  let rewritten = cookie;
+  // Remove Domain=... so browser defaults to our domain
+  rewritten = rewritten.replace(/;\s*Domain=[^;]*/gi, "");
+  // Remove __Secure- prefix — it requires Secure + exact domain
+  rewritten = rewritten.replace(/__Secure-/g, "");
+  return rewritten;
+}
+
 async function proxyAuth(req: NextRequest, path: string) {
   const mappedPath = mapAuthPath(path);
   const url = `${NCB_AUTH_URL}/${mappedPath}`;
@@ -29,10 +44,17 @@ async function proxyAuth(req: NextRequest, path: string) {
   const ct = req.headers.get("content-type");
   if (ct) headers["Content-Type"] = ct;
 
+  // Forward cookies — remap our cookie names back to NCB names
   const cookie = req.headers.get("cookie");
-  if (cookie) headers["Cookie"] = cookie;
+  if (cookie) {
+    // Our cookies are without __Secure- prefix, NCB expects with prefix
+    const remapped = cookie
+      .replace(/better-auth\.session_token/g, "__Secure-better-auth.session_token")
+      .replace(/better-auth\.session_data/g, "__Secure-better-auth.session_data");
+    headers["Cookie"] = remapped;
+  }
 
-  // NCB requires Origin header — forward from client or use app URL
+  // NCB requires Origin header
   const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
   headers["Origin"] = origin;
   headers["Referer"] = origin + "/";
@@ -54,9 +76,10 @@ async function proxyAuth(req: NextRequest, path: string) {
     headers: { "Content-Type": res.headers.get("Content-Type") || "application/json" },
   });
 
+  // Rewrite Set-Cookie headers so they work on our domain
   const setCookies = res.headers.getSetCookie?.() || [];
   for (const sc of setCookies) {
-    response.headers.append("Set-Cookie", sc);
+    response.headers.append("Set-Cookie", rewriteCookie(sc));
   }
 
   return response;
