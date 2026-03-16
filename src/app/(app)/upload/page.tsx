@@ -7,7 +7,7 @@ import { useTranscriptionSettings } from "@/hooks/use-transcription-settings";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { FileDropzone } from "@/components/upload/file-dropzone";
 import { UploadProgress } from "@/components/upload/upload-progress";
-import { TranscriptionSettings } from "@/components/upload/transcription-settings";
+import { TranscriptionSettingsPanel } from "@/components/upload/transcription-settings";
 import { PresetSelector } from "@/components/presets/preset-selector";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,44 +16,33 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload as UploadIcon, Link2, Mic, CheckCircle2, Info, Loader2 } from "lucide-react";
+import { Upload as UploadIcon, Link2, Mic, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Preset } from "@/types";
+import { LANGUAGES } from "@/constants/languages";
 
 type UploadMode = "file" | "url" | "voice";
-type UploadStep = "select" | "uploading" | "configure" | "submitting";
 
 export default function UploadPage() {
   const router = useRouter();
   const { workspace } = useWorkspace();
   const [activeTab, setActiveTab] = useState<UploadMode>("file");
-  const [uploadStep, setUploadStep] = useState<UploadStep>("select");
   const [urlInput, setUrlInput] = useState("");
   const [activePresetName, setActivePresetName] = useState<string | null>(null);
 
-  const { uploadFile, uploadProgress, isUploading } = useUpload();
-  const { settings, isLiteMode, updateSettings, handleTranscriptionTypeChange, buildSerializableSettings } = useTranscriptionSettings();
+  const { startUpload, phase, progress, file, transcriptionId, error, cancelUpload, reset } = useUpload();
+  const { settings, isLiteMode, updateSettings, handleTranscriptionTypeChange } = useTranscriptionSettings();
 
-  const [uploadedData, setUploadedData] = useState<{
-    transcriptionId: number; storagePath: string; filename: string;
-  } | null>(null);
+  const isUploading = phase === "uploading" || phase === "presigning" || phase === "completing";
+  const isDone = phase === "done";
+  const isError = phase === "error";
 
-  const handleFileSelect = async (file: File) => {
-    setUploadStep("uploading");
-    try {
-      const result = await uploadFile(file);
-      setUploadedData(result);
-      setUploadStep("configure");
-      toast.success(`Файл "${file.name}" завантажено`);
-    } catch (err: any) {
-      toast.error(err.message || "Помилка завантаження");
-      setUploadStep("select");
-    }
+  const handleFileSelect = async (selectedFile: File) => {
+    await startUpload(selectedFile);
   };
 
   const handleStartTranscription = async () => {
-    if (!uploadedData) return;
-    setUploadStep("submitting");
+    if (!transcriptionId || !workspace) return;
 
     try {
       const res = await fetch("/api/upload/complete", {
@@ -61,10 +50,10 @@ export default function UploadPage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          transcriptionId: uploadedData.transcriptionId,
-          workspaceId: workspace?.id,
+          transcriptionId,
+          workspaceId: workspace.id,
           mode: isLiteMode ? "lite" : "full",
-          languageCode: settings.language_code,
+          languageCode: settings.language,
         }),
       });
 
@@ -74,23 +63,31 @@ export default function UploadPage() {
       }
 
       toast.success("Транскрипція запущена!");
-      router.push(`/transcriptions/${uploadedData.transcriptionId}`);
+      router.push(`/transcriptions/${transcriptionId}`);
     } catch (err: any) {
       toast.error(err.message);
-      setUploadStep("configure");
     }
   };
 
-  const handlePresetApply = (preset: Preset) => {
-    if (preset.config_json) {
-      const config = typeof preset.config_json === "string"
-        ? JSON.parse(preset.config_json) : preset.config_json;
-      updateSettings(config);
-      handleTranscriptionTypeChange(preset.transcription_type as "full" | "lite" || "full");
+  const handlePresetApply = (preset: Preset | null) => {
+    if (!preset) {
+      setActivePresetName(null);
+      return;
     }
-    setActivePresetName(preset.title);
-    toast.success(`Пресет "${preset.title}" застосовано`);
+    if (preset.settings_json) {
+      try {
+        const config = typeof preset.settings_json === "string"
+          ? JSON.parse(preset.settings_json) : preset.settings_json;
+        updateSettings(config);
+        handleTranscriptionTypeChange(preset.transcription_type || "full");
+      } catch {}
+    }
+    setActivePresetName(preset.name);
+    toast.success(`Пресет "${preset.name}" застосовано`);
   };
+
+  const languages = LANGUAGES.map(l => ({ value: l.code, label: l.name }));
+  const diarizationAvailable = !isLiteMode;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -104,8 +101,8 @@ export default function UploadPage() {
         )}
       </div>
 
-      {/* Step 1: File Selection */}
-      {uploadStep === "select" && (
+      {/* File Selection */}
+      {phase === "idle" && (
         <Card>
           <CardHeader><CardTitle>Крок 1: Вибір файлу</CardTitle></CardHeader>
           <CardContent>
@@ -127,7 +124,7 @@ export default function UploadPage() {
                     <Input value={urlInput} onChange={(e) => setUrlInput(e.target.value)}
                       placeholder="https://example.com/file.mp3" />
                     <Button variant="secondary" onClick={() => {
-                      if (urlInput.trim()) { setUploadStep("configure"); toast.success("URL підтверджено"); }
+                      if (urlInput.trim()) toast.info("URL завантаження — скоро");
                     }}>Перевірити</Button>
                   </div>
                 </div>
@@ -142,40 +139,44 @@ export default function UploadPage() {
         </Card>
       )}
 
-      {/* Step 2: Uploading */}
-      {uploadStep === "uploading" && (
-        <UploadProgress progress={uploadProgress} />
+      {/* Uploading */}
+      {(isUploading || isError) && (
+        <UploadProgress
+          phase={phase}
+          progress={progress}
+          error={error}
+          fileName={file?.name || ""}
+          onCancel={cancelUpload}
+        />
       )}
 
-      {/* Step 3: Configure */}
-      {uploadStep === "configure" && (
+      {/* Configure after upload */}
+      {isDone && (
         <>
-          {uploadedData && (
-            <Alert>
-              <CheckCircle2 className="h-4 w-4" />
-              <AlertDescription>
-                Файл <strong>{uploadedData.filename}</strong> завантажено!
-              </AlertDescription>
-            </Alert>
-          )}
+          <Alert>
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertDescription>
+              Файл <strong>{file?.name}</strong> завантажено!
+            </AlertDescription>
+          </Alert>
 
           <Card>
             <CardHeader><CardTitle>Крок 2: Налаштування</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label className="text-base font-semibold">Пресети</Label>
-                <PresetSelector onSelect={handlePresetApply} />
+                <PresetSelector onPresetSelect={handlePresetApply} />
               </div>
 
-              <TranscriptionSettings
+              <TranscriptionSettingsPanel
                 settings={settings}
-                isLiteMode={isLiteMode}
+                languages={languages}
+                diarizationAvailable={diarizationAvailable}
                 onUpdate={updateSettings}
-                onTypeChange={handleTranscriptionTypeChange}
               />
 
               <div className="flex gap-2 pt-4">
-                <Button variant="outline" onClick={() => { setUploadStep("select"); setUploadedData(null); }}>
+                <Button variant="outline" onClick={reset}>
                   Назад
                 </Button>
                 <Button onClick={handleStartTranscription} className="flex-1">
@@ -185,16 +186,6 @@ export default function UploadPage() {
             </CardContent>
           </Card>
         </>
-      )}
-
-      {/* Step 4: Submitting */}
-      {uploadStep === "submitting" && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Loader2 className="w-12 h-12 mx-auto animate-spin text-primary" />
-            <p className="mt-4 text-lg font-medium">Створення задачі...</p>
-          </CardContent>
-        </Card>
       )}
     </div>
   );
