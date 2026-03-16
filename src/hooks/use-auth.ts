@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import * as authService from "@/services/auth";
-import { apiGet } from "@/services/api-client";
+import { apiGet, apiPost } from "@/services/api-client";
 import { API_ROUTES } from "@/constants/routes";
 import { ROUTES } from "@/constants/routes";
 import type { AppUser, Workspace } from "@/types";
@@ -39,23 +39,36 @@ export function useAuth() {
       return;
     }
 
-    // Fetch app_user and workspace
+    // Fetch or auto-provision app_user and workspace
     (async () => {
       try {
+        // Try to find existing app_user
         const appUsers = await apiGet<{ data: AppUser[] }>(API_ROUTES.DATA("app_users"), {
           ncb_user_id: user.id,
           limit: 1,
         });
-        const appUser = appUsers.data?.[0] ?? null;
-        store.setAppUser(appUser);
+        let appUser = appUsers.data?.[0] ?? null;
+        let workspace: Workspace | null = null;
 
-        if (appUser) {
-          const ws = await apiGet<Workspace>(
+        if (!appUser) {
+          // Auto-provision: create app_user + workspace + workspace_member
+          const result = await apiPost<{ appUser: AppUser; workspace: Workspace }>(
+            "/api/auth/provision",
+            { ncbUserId: user.id, email: user.email, name: user.name }
+          );
+          appUser = result.appUser;
+          workspace = result.workspace;
+        } else {
+          // Load existing workspace
+          workspace = await apiGet<Workspace>(
             API_ROUTES.DATA_RECORD("workspaces", appUser.workspace_id)
           );
-          store.setWorkspace(ws);
         }
-      } catch {
+
+        store.setAppUser(appUser);
+        store.setWorkspace(workspace);
+      } catch (err) {
+        console.error("Failed to load/provision user:", err);
         store.setAppUser(null);
         store.setWorkspace(null);
       } finally {
