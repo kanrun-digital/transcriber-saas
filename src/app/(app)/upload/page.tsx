@@ -19,8 +19,6 @@ import { Label } from "@/components/ui/label";
 import { Upload as UploadIcon, Link2, Mic, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Preset } from "@/types";
-import { FULL_MODE_LANGUAGES } from "@/constants/languages";
-
 
 type UploadMode = "file" | "url" | "voice";
 
@@ -32,7 +30,8 @@ export default function UploadPage() {
   const [activePresetName, setActivePresetName] = useState<string | null>(null);
 
   const { startUpload, phase, progress, file, transcriptionId, error, cancelUpload, reset } = useUpload();
-  const { settings, isLiteMode, updateSettings, handleTranscriptionTypeChange } = useTranscriptionSettings();
+  const { settings, languages, diarizationAvailable, updateSetting, applyPreset } = useTranscriptionSettings();
+  const isLiteMode = settings.saladMode === "lite";
 
   const isUploading = phase === "uploading" || phase === "presigning" || phase === "completing";
   const isDone = phase === "done";
@@ -79,17 +78,12 @@ export default function UploadPage() {
       try {
         const config = typeof preset.settings_json === "string"
           ? JSON.parse(preset.settings_json) : preset.settings_json;
-        updateSettings(config);
-        handleTranscriptionTypeChange(preset.transcription_type || "full");
+        applyPreset(config);
       } catch {}
     }
     setActivePresetName(preset.name);
     toast.success(`Пресет "${preset.name}" застосовано`);
   };
-
-  const languages = FULL_MODE_LANGUAGES as { value: string; label: string }[];
-
-  const diarizationAvailable = !isLiteMode;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -103,7 +97,6 @@ export default function UploadPage() {
         )}
       </div>
 
-      {/* File Selection */}
       {phase === "idle" && (
         <Card>
           <CardHeader><CardTitle>Крок 1: Вибір файлу</CardTitle></CardHeader>
@@ -141,7 +134,6 @@ export default function UploadPage() {
         </Card>
       )}
 
-      {/* Uploading */}
       {(isUploading || isError) && (
         <UploadProgress
           phase={phase}
@@ -152,7 +144,6 @@ export default function UploadPage() {
         />
       )}
 
-      {/* Configure after upload */}
       {isDone && (
         <>
           <Alert>
@@ -172,15 +163,13 @@ export default function UploadPage() {
 
               <TranscriptionSettingsPanel
                 settings={settings}
-                languages={languages}
+                languages={languages as { value: string; label: string }[]}
                 diarizationAvailable={diarizationAvailable}
-                onUpdate={updateSettings}
+                onUpdate={updateSetting}
               />
 
               <div className="flex gap-2 pt-4">
-                <Button variant="outline" onClick={reset}>
-                  Назад
-                </Button>
+                <Button variant="outline" onClick={reset}>Назад</Button>
                 <Button onClick={handleStartTranscription} className="flex-1">
                   Почати транскрипцію
                 </Button>
