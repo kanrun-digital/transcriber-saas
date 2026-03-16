@@ -18,14 +18,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if app_user already exists
-    const existing = await ncb.read<any>("app_users", {
-      ncb_user_id: ncbUserId,
-      limit: 1,
-    });
+    const existingUser = await ncb.findOne<any>("app_users", { ncb_user_id: ncbUserId });
 
-    if (existing?.data?.length > 0) {
-      // Already provisioned — return existing
-      const appUser = existing.data[0];
+    if (existingUser) {
+      const appUser = existingUser;
+
       const workspace = await ncb.readOne<any>("workspaces", appUser.workspace_id);
       return NextResponse.json({ appUser, workspace });
     }
