@@ -104,7 +104,7 @@ export function PresetSelector({ onPresetSelect, selectedPresetId }: PresetSelec
         <Card className="p-4 bg-muted/50">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <h4 className="font-semibold">{selectedPreset.name}</h4>
+              <h4 className="font-semibold">{selectedPreset.title}</h4>
               <Badge
                 variant={
                   selectedPreset.transcription_type === "lite" ? "secondary" : "default"
