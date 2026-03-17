@@ -82,7 +82,7 @@ export function PresetSelector({ onPresetSelect, selectedPresetId }: PresetSelec
                 {categoryPresets.map((preset) => (
                   <SelectItem key={preset.id} value={String(preset.id)}>
                     <div className="flex items-center gap-2">
-                      <span>{preset.name}</span>
+                      <span>{preset.title}</span>
                       <Badge
                         variant={
                           preset.transcription_type === "lite" ? "secondary" : "default"
