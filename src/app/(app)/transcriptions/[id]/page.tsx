@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { transcriptionsService } from "@/services/transcriptions";
 import { StatusBadge } from "@/components/transcriptions/status-badge";
-import { TranscriptionSettings as TranscriptionSettingsPanel } from "@/components/upload/transcription-settings";
+import { TranscriptionSettingsPanel } from "@/components/upload/transcription-settings";
 import { useTranscriptionSettings } from "@/hooks/use-transcription-settings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
