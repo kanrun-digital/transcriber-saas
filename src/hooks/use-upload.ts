@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useUploadStore } from "@/stores/upload-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { presignUpload, uploadToS3, completeUpload } from "@/services/upload";
+import { presignUpload, uploadToS3 } from "@/services/upload";
 import type { SaladMode } from "@/types";
 
 interface UploadOptions {
@@ -64,21 +64,10 @@ export function useUpload() {
         store.setAbortFn(abort);
         await promise;
 
-        // Phase 3: Complete
-        store.setPhase("completing");
-        await completeUpload({
-          transcriptionId: presign.transcriptionId,
-          workspaceId: workspace.id,
-          mode: options.saladMode || presign.saladMode,
-          languageCode: options.language,
-        });
-
+        // Upload complete — stop here, let user configure settings
         store.setPhase("done");
-        toast.success("Файл завантажено, транскрипція розпочата!");
+        toast.success("Файл завантажено! Налаштуйте параметри транскрипції.");
 
-        // Refresh transcriptions list
-        queryClient.invalidateQueries({ queryKey: ["transcriptions"] });
-        queryClient.invalidateQueries({ queryKey: ["usage"] });
       } catch (error: any) {
         if (error.message === "Завантаження скасовано") {
           store.reset();
