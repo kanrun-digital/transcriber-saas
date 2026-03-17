@@ -24,57 +24,57 @@ import { PRESET_CATEGORIES, FULL_MODE_LANGUAGES } from "@/constants/languages";
 import type { Preset } from "@/types";
 
 interface PresetFormData {
-  name: string;
+  title: string;
   description: string;
   category: string;
   transcription_type: "full" | "lite";
   language: string;
   diarization: boolean;
   numSpeakers: number;
-  is_default: number;
+  is_active: number;
 }
 
 const defaultForm: PresetFormData = {
-  name: "",
+  title: "",
   description: "",
   category: "business",
   transcription_type: "full",
   language: "uk",
   diarization: true,
   numSpeakers: 2,
-  is_default: 0,
+  is_active: 0,
 };
 
 function presetToForm(preset: Preset): PresetFormData {
   let settings: any = {};
   try {
-    settings = typeof preset.settings_json === "string"
-      ? JSON.parse(preset.settings_json) : preset.settings_json;
+    settings = typeof preset.config_json === "string"
+      ? JSON.parse(preset.config_json) : preset.config_json;
   } catch {}
   return {
-    name: preset.name,
+    title: preset.title,
     description: preset.description || "",
     category: preset.category || "business",
     transcription_type: preset.transcription_type || "full",
     language: settings.language || "uk",
     diarization: settings.diarization ?? true,
     numSpeakers: settings.numSpeakers ?? 2,
-    is_default: preset.is_default,
+    is_active: preset.is_active,
   };
 }
 
 function formToPayload(form: PresetFormData) {
   return {
-    name: form.name,
+    title: form.title,
     description: form.description || undefined,
     category: form.category,
     transcription_type: form.transcription_type,
-    settings_json: JSON.stringify({
+    config_json: JSON.stringify({
       language: form.language,
       diarization: form.diarization,
       numSpeakers: form.numSpeakers,
     }),
-    is_default: form.is_default,
+    is_active: form.is_active,
   };
 }
 
@@ -115,7 +115,7 @@ function PresetFormDialog({
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label>Назва *</Label>
-            <Input value={form.name} onChange={(e) => update("name", e.target.value)} placeholder="Інтерв'ю UA" />
+            <Input value={form.title} onChange={(e) => update("title", e.target.value)} placeholder="Інтерв'ю UA" />
           </div>
 
           <div className="space-y-2">
@@ -176,13 +176,13 @@ function PresetFormDialog({
 
           <div className="flex items-center justify-between">
             <Label>За замовчуванням</Label>
-            <Switch checked={form.is_default === 1} onCheckedChange={(v) => update("is_default", v ? 1 : 0)} />
+            <Switch checked={form.is_active === 1} onCheckedChange={(v) => update("is_active", v ? 1 : 0)} />
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Скасувати</Button>
-          <Button onClick={() => onSave(form)} disabled={isSaving || !form.name.trim()}>
+          <Button onClick={() => onSave(form)} disabled={isSaving || !form.title.trim()}>
             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isEditing ? "Зберегти" : "Створити"}
           </Button>
@@ -336,7 +336,7 @@ export default function PresetsPage() {
           <DialogHeader>
             <DialogTitle>Видалити пресет?</DialogTitle>
             <DialogDescription>
-              Ви впевнені що хочете видалити пресет <strong>{deleteConfirm?.name}</strong>? Цю дію не можна скасувати.
+              Ви впевнені що хочете видалити пресет <strong>{deleteConfirm?.title}</strong>? Цю дію не можна скасувати.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
