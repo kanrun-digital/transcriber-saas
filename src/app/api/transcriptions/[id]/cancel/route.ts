@@ -10,7 +10,7 @@ function now(): string {
  * POST /api/transcriptions/[id]/cancel
  * 
  * 1. Check Salad job status first
- * 2. If succeeded — save result and mark completed
+ * 2. If succeeded — fetch result (including output.url), save and mark completed
  * 3. If failed — mark failed
  * 4. If pending/running — cancel and reset to "uploaded"
  */
@@ -39,30 +39,48 @@ export async function POST(
         const jobStatus = job.status;
 
         if (jobStatus === "succeeded") {
-          // Job actually completed! Save the result
-          const output = job.output || {} as any;
+          // Job completed! Get output — handle both inline text and file URL
+          let output = (job.output || {}) as any;
+
+          // If return_as_file=true, output has URL instead of text — fetch it
+          if (output.url && !output.text) {
+            try {
+              const res = await fetch(output.url);
+              if (res.ok) {
+                const fullOutput = await res.json();
+                output = { ...output, ...fullOutput };
+              }
+            } catch (e: any) {
+              console.error(`[Cancel] Error fetching output URL:`, e.message);
+            }
+          }
+
           const text = output.text || "";
           const summary = output.summary || null;
-          const srt = output.srt || null;
+          const srtContent = output.srt_content || "";
+          const durationSec = output.duration_in_seconds || (output.duration || 0) * 3600;
+          const processingTime = output.processing_time || 0;
           const wordCount = text ? text.split(/\s+/).filter(Boolean).length : 0;
           const numSpeakers = output.num_speakers || null;
           const detectedLang = output.detected_language || null;
 
           await ncb.update("transcriptions", txId, {
             status: "completed",
-            transcript_text: text.substring(0, 500), // NCB preview
+            transcript_text: text.substring(0, 500),
             summary: summary ? summary.substring(0, 500) : null,
-            srt_content: srt ? srt.substring(0, 500) : null,
+            srt_content: srtContent ? srtContent.substring(0, 500) : null,
             word_count: wordCount,
             num_speakers: numSpeakers,
             detected_language: detectedLang,
+            duration_seconds: durationSec || undefined,
+            processing_time_seconds: processingTime || undefined,
             updated_at: now(),
           });
 
           return NextResponse.json({
             ok: true,
             action: "completed",
-            message: "Транскрипція вже завершена в Salad! Результат збережено.",
+            message: `Транскрипція вже завершена в Salad! ${wordCount} слів збережено.`,
           });
         }
 
@@ -88,7 +106,6 @@ export async function POST(
         }
 
       } catch (saladError: any) {
-        // Salad API error — job might not exist anymore, proceed with reset
         console.log(`[Cancel] Salad check failed for job ${tx.salad_job_id}: ${saladError.message}`);
       }
     }
