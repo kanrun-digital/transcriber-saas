@@ -103,13 +103,17 @@ export async function POST(req: NextRequest) {
       is_active: 1,
     });
 
-    // 3. workspace_members table not created in NCB yet — skip
-    // When table exists, uncomment:
-    // await ncbCreate("workspace_members", {
-    //   workspace_id: wsResult.id,
-    //   app_user_id: auResult.id,
-    //   role: "owner",
-    // });
+    // 3. Create organization_member
+    try {
+      await ncbCreate("organization_members", {
+        workspace_id: wsResult.id,
+        app_user_id: auResult.id,
+        member_role: "owner",
+        status: "active",
+      });
+    } catch (e) {
+      console.warn("[provision] organization_members create failed (non-critical):", e);
+    }
 
     const appUser = await ncbReadOne("app_users", auResult.id);
     const workspace = await ncbReadOne("workspaces", wsResult.id);
