@@ -25,16 +25,16 @@ export function useCreatePreset() {
 
   return useMutation({
     mutationFn: (data: {
-      name: string;
+      title: string;
       description?: string;
       category?: string;
       transcription_type: string;
-      settings_json: string;
+      config_json: string;
     }) =>
       presetsService.createPreset({
         ...data,
         workspace_id: workspace!.id,
-        is_default: 0,
+        is_active: 0,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["presets"] });
