@@ -79,7 +79,7 @@ export default function UploadPage() {
   const isError = phase === "error";
 
   // Show settings panel when file uploaded OR URL validated
-  const showSettings = isDone || urlResult !== null;
+  const showSettings = isDone || !!urlResult;
 
   const handleFileSelect = (selectedFile: File) => {
     startUpload(selectedFile);
@@ -225,11 +225,11 @@ export default function UploadPage() {
                   {urlError && (
                     <Alert variant="destructive"><AlertDescription>{urlError}</AlertDescription></Alert>
                   )}
-                  {urlResult && (
+                  {(urlResult as any) && (
                     <Alert>
                       <CheckCircle2 className="h-4 w-4" />
                       <AlertDescription>
-                        <strong>{urlResult.source}</strong> — посилання готове до обробки
+                        <strong>{(urlResult as any)?.source}</strong> — посилання готове до обробки
                       </AlertDescription>
                     </Alert>
                   )}
