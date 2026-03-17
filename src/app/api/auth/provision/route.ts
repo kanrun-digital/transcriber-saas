@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as ncb from "@/lib/ncb";
 
 /**
  * POST /api/auth/provision
@@ -7,28 +6,74 @@ import * as ncb from "@/lib/ncb";
  * Auto-provision app_user + workspace + workspace_member
  * Called after first login when app_user doesn't exist yet.
  * 
- * Body: { ncbUserId, email, name }
+ * Uses direct fetch to NCB to avoid module-level env caching issues.
  */
+
+function ncbHeaders() {
+  return {
+    "Content-Type": "application/json",
+    "X-Database-Instance": String(process.env["NCB_INSTANCE"] || ""),
+    Authorization: `Bearer ${String(process.env["NCB_SECRET_KEY"] || "")}`,
+  };
+}
+
+function dataUrl() {
+  return String(process.env["NCB_DATA_URL"] || "https://openapi.nocodebackend.com");
+}
+
+async function ncbRead(table: string, filters: Record<string, string | number>) {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters)) params.set(k, String(v));
+  params.set("limit", "1");
+  const url = `${dataUrl()}/read/${table}?${params}`;
+  const res = await fetch(url, { headers: ncbHeaders(), cache: "no-store" });
+  if (!res.ok) throw new Error(`NCB read ${table} failed (${res.status}): ${await res.text()}`);
+  const result = await res.json();
+  return result.data || [];
+}
+
+async function ncbCreate(table: string, data: Record<string, unknown>) {
+  const url = `${dataUrl()}/create/${table}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: ncbHeaders(),
+    body: JSON.stringify(data),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`NCB create ${table} failed (${res.status}): ${await res.text()}`);
+  const result = await res.json();
+  return { id: result.id || result.data?.id };
+}
+
+async function ncbReadOne(table: string, id: number) {
+  const url = `${dataUrl()}/read/${table}/${id}`;
+  const res = await fetch(url, { headers: ncbHeaders(), cache: "no-store" });
+  if (!res.ok) return null;
+  const result = await res.json();
+  return result.data || result;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { ncbUserId, email, name } = await req.json();
+    // Debug: log env availability
+    const inst = process.env["NCB_INSTANCE"];
+    console.log("[provision] NCB_INSTANCE:", inst ? "set" : "MISSING");
 
+    const { ncbUserId, email, name } = await req.json();
     if (!ncbUserId || !email) {
       return NextResponse.json({ error: "Missing ncbUserId or email" }, { status: 400 });
     }
 
     // Check if app_user already exists
-    const existingUser = await ncb.findOne<any>("app_users", { ncb_user_id: ncbUserId });
-
-    if (existingUser) {
-      const appUser = existingUser;
-
-      const workspace = await ncb.readOne<any>("workspaces", appUser.workspace_id);
+    const existing = await ncbRead("app_users", { ncb_user_id: ncbUserId });
+    if (existing.length > 0) {
+      const appUser = existing[0];
+      const workspace = await ncbReadOne("workspaces", appUser.workspace_id);
       return NextResponse.json({ appUser, workspace });
     }
 
     // 1. Create workspace
-    const wsResult = await ncb.create("workspaces", {
+    const wsResult = await ncbCreate("workspaces", {
       name: `${name || email.split("@")[0]}'s Workspace`,
       slug: email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "-"),
       plan: "free",
@@ -45,32 +90,28 @@ export async function POST(req: NextRequest) {
     });
 
     // 2. Create app_user
-    const auResult = await ncb.create("app_users", {
+    const auResult = await ncbCreate("app_users", {
       workspace_id: wsResult.id,
       ncb_user_id: ncbUserId,
-      email: email,
+      email,
       name: name || null,
       role: "owner",
       is_active: 1,
     });
 
     // 3. Create workspace_member
-    await ncb.create("workspace_members", {
+    await ncbCreate("workspace_members", {
       workspace_id: wsResult.id,
       app_user_id: auResult.id,
       role: "owner",
     });
 
-    // Read back full objects
-    const appUser = await ncb.readOne<any>("app_users", auResult.id);
-    const workspace = await ncb.readOne<any>("workspaces", wsResult.id);
+    const appUser = await ncbReadOne("app_users", auResult.id);
+    const workspace = await ncbReadOne("workspaces", wsResult.id);
 
     return NextResponse.json({ appUser, workspace, provisioned: true });
   } catch (error: any) {
     console.error("Provision error:", error);
-    return NextResponse.json(
-      { error: error.message || "Provision failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message || "Provision failed" }, { status: 500 });
   }
 }
