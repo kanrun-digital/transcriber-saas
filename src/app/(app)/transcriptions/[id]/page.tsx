@@ -94,7 +94,7 @@ export default function TranscriptionDetailPage() {
         body: JSON.stringify({
           transcriptionId: tx.id,
           workspaceId: tx.workspace_id,
-          s3Key: tx.s3_key,
+          s3Key: tx.storage_url,
           settings: {
             language: settings.language,
             enableDiarization: settings.enableDiarization,
