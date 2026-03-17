@@ -6,26 +6,39 @@ import { NextRequest, NextResponse } from "next/server";
  * Auto-provision app_user + workspace + workspace_member
  * Called after first login when app_user doesn't exist yet.
  * 
- * Uses direct fetch to NCB to avoid module-level env caching issues.
+ * NCB Data API requires Instance as QUERY PARAM (not header).
+ * NCB Auth API requires X-Database-Instance as HEADER.
  */
 
-function ncbHeaders() {
-  return {
-    "Content-Type": "application/json",
-    "X-Database-Instance": String(process.env["NCB_INSTANCE"] || ""),
-    Authorization: `Bearer ${String(process.env["NCB_SECRET_KEY"] || "")}`,
-  };
+function getInstance() {
+  return String(process.env["NCB_INSTANCE"] || "");
+}
+
+function getSecret() {
+  return String(process.env["NCB_SECRET_KEY"] || "");
 }
 
 function dataUrl() {
   return String(process.env["NCB_DATA_URL"] || "https://openapi.nocodebackend.com");
 }
 
+function ncbHeaders() {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${getSecret()}`,
+  };
+}
+
+function appendInstance(url: string): string {
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}Instance=${getInstance()}`;
+}
+
 async function ncbRead(table: string, filters: Record<string, string | number>) {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(filters)) params.set(k, String(v));
   params.set("limit", "1");
-  const url = `${dataUrl()}/read/${table}?${params}`;
+  const url = appendInstance(`${dataUrl()}/read/${table}?${params}`);
   const res = await fetch(url, { headers: ncbHeaders(), cache: "no-store" });
   if (!res.ok) throw new Error(`NCB read ${table} failed (${res.status}): ${await res.text()}`);
   const result = await res.json();
@@ -33,7 +46,7 @@ async function ncbRead(table: string, filters: Record<string, string | number>) 
 }
 
 async function ncbCreate(table: string, data: Record<string, unknown>) {
-  const url = `${dataUrl()}/create/${table}`;
+  const url = appendInstance(`${dataUrl()}/create/${table}`);
   const res = await fetch(url, {
     method: "POST",
     headers: ncbHeaders(),
@@ -46,7 +59,7 @@ async function ncbCreate(table: string, data: Record<string, unknown>) {
 }
 
 async function ncbReadOne(table: string, id: number) {
-  const url = `${dataUrl()}/read/${table}/${id}`;
+  const url = appendInstance(`${dataUrl()}/read/${table}/${id}`);
   const res = await fetch(url, { headers: ncbHeaders(), cache: "no-store" });
   if (!res.ok) return null;
   const result = await res.json();
@@ -55,9 +68,8 @@ async function ncbReadOne(table: string, id: number) {
 
 export async function POST(req: NextRequest) {
   try {
-    // Debug: log env availability
-    const inst = process.env["NCB_INSTANCE"];
-    console.log("[provision] NCB_INSTANCE:", inst ? "set" : "MISSING");
+    const inst = getInstance();
+    console.log("[provision] NCB_INSTANCE:", inst ? inst : "MISSING");
 
     const { ncbUserId, email, name } = await req.json();
     if (!ncbUserId || !email) {
