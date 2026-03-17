@@ -8,13 +8,14 @@
  * Both URLs are used. Auth for login/session. Data for all CRUD.
  */
 
-// Read env dynamically to avoid stale module-level values
+// Read env at runtime using bracket notation so Next.js cannot inline at build time
+const _env = process.env;
 function env() {
   return {
-    dataUrl: process.env.NCB_DATA_URL || "https://openapi.nocodebackend.com",
-    authUrl: process.env.NCB_AUTH_URL || "https://app.nocodebackend.com/api/user-auth",
-    instance: process.env.NCB_INSTANCE || "",
-    secret: process.env.NCB_SECRET_KEY || "",
+    dataUrl: _env["NCB_DATA_URL"] || "https://openapi.nocodebackend.com",
+    authUrl: _env["NCB_AUTH_URL"] || "https://app.nocodebackend.com/api/user-auth",
+    instance: _env["NCB_INSTANCE"] || "",
+    secret: _env["NCB_SECRET_KEY"] || "",
   };
 }
 
