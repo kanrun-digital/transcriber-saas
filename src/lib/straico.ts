@@ -1,10 +1,53 @@
-const STRAICO_API_URL = "https://api.straico.com";
-const STRAICO_API_KEY = process.env.STRAICO_API_KEY!;
+// Runtime env — not inlined by Next.js
+function straicoConfig() {
+  return {
+    apiUrl: "https://api.straico.com",
+    apiKey: process.env["STRAICO_API_KEY"] || "",
+  };
+}
 
-const headers = {
-  "Content-Type": "application/json",
-  Authorization: `Bearer ${STRAICO_API_KEY}`,
-};
+function getHeaders() {
+  const config = straicoConfig();
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${config.apiKey}`,
+  };
+}
+
+// ============ Models ============
+
+export interface StraicoModel {
+  name: string;
+  id: string;
+  model?: string;
+  word_limit?: number;
+  max_output?: number;
+  pricing: { coins: number; words: number } | Record<string, { coins: number; size: string }>;
+  owned_by?: string;
+  model_type?: "chat" | "image" | "video" | "audio";
+  metadata?: {
+    editors_choice_level?: number;
+    pros?: string[];
+    cons?: string[];
+    applications?: string[];
+    features?: string[];
+    icon?: string;
+    other?: string[];
+  };
+}
+
+export async function listModels(): Promise<{ chat: StraicoModel[]; image: StraicoModel[] }> {
+  const config = straicoConfig();
+  const res = await fetch(`${config.apiUrl}/v1/models`, {
+    headers: getHeaders(),
+  });
+  if (!res.ok) throw new Error(`Straico models error: ${await res.text()}`);
+  const data = await res.json();
+  return {
+    chat: data.data?.chat || [],
+    image: data.data?.image?.flat() || [],
+  };
+}
 
 // ============ RAG ============
 
@@ -14,15 +57,12 @@ export interface RagBase {
   description: string;
 }
 
-/**
- * Create a new RAG base.
- * Can optionally include files (Blob/File).
- */
 export async function createRag(
   name: string,
   description: string,
   files?: File[] | Blob[]
 ): Promise<{ id: string }> {
+  const config = straicoConfig();
   const formData = new FormData();
   formData.append("name", name);
   formData.append("description", description);
@@ -36,9 +76,9 @@ export async function createRag(
     }
   }
 
-  const res = await fetch(`${STRAICO_API_URL}/v0/rag`, {
+  const res = await fetch(`${config.apiUrl}/v0/rag`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${STRAICO_API_KEY}` },
+    headers: { Authorization: `Bearer ${config.apiKey}` },
     body: formData,
   });
 
@@ -47,17 +87,12 @@ export async function createRag(
   return { id: data.data?._id || data.data?.id };
 }
 
-/**
- * Upload file to existing RAG base by URL.
- * Straico downloads the file from the URL and indexes it.
- */
 export async function uploadFileToRag(
   ragId: string,
   fileUrl: string,
   filename: string
 ): Promise<void> {
-  // Straico expects file upload via form data
-  // Fetch the file first, then upload as blob
+  const config = straicoConfig();
   const fileRes = await fetch(fileUrl);
   if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.status}`);
   const blob = await fileRes.blob();
@@ -65,18 +100,15 @@ export async function uploadFileToRag(
   const formData = new FormData();
   formData.append("files", blob, filename);
 
-  const res = await fetch(`${STRAICO_API_URL}/v0/rag/${ragId}/file`, {
+  const res = await fetch(`${config.apiUrl}/v0/rag/${ragId}/file`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${STRAICO_API_KEY}` },
+    headers: { Authorization: `Bearer ${config.apiKey}` },
     body: formData,
   });
 
   if (!res.ok) throw new Error(`Straico RAG file upload error: ${await res.text()}`);
 }
 
-/**
- * Query a RAG base
- */
 export async function queryRag(
   ragId: string,
   prompt: string,
@@ -87,15 +119,16 @@ export async function queryRag(
     scoreThreshold?: number;
   }
 ): Promise<{ answer: string; references: string[] }> {
+  const config = straicoConfig();
   const body: Record<string, unknown> = { prompt, model };
 
   if (options?.searchType) body.search_type = options.searchType;
   if (options?.k) body.k = options.k;
   if (options?.scoreThreshold) body.score_threshold = options.scoreThreshold;
 
-  const res = await fetch(`${STRAICO_API_URL}/v0/rag/${ragId}/prompt`, {
+  const res = await fetch(`${config.apiUrl}/v0/rag/${ragId}/prompt`, {
     method: "POST",
-    headers,
+    headers: getHeaders(),
     body: JSON.stringify(body),
   });
 
@@ -108,23 +141,19 @@ export async function queryRag(
   };
 }
 
-/**
- * List all RAG bases
- */
 export async function listRags(): Promise<RagBase[]> {
-  const res = await fetch(`${STRAICO_API_URL}/v0/rag/user`, { headers });
+  const config = straicoConfig();
+  const res = await fetch(`${config.apiUrl}/v0/rag/user`, { headers: getHeaders() });
   if (!res.ok) throw new Error(`Straico list RAGs error: ${await res.text()}`);
   const data = await res.json();
   return data.data || [];
 }
 
-/**
- * Delete a RAG base
- */
 export async function deleteRag(ragId: string): Promise<void> {
-  const res = await fetch(`${STRAICO_API_URL}/v0/rag/${ragId}`, {
+  const config = straicoConfig();
+  const res = await fetch(`${config.apiUrl}/v0/rag/${ragId}`, {
     method: "DELETE",
-    headers,
+    headers: getHeaders(),
   });
   if (!res.ok) throw new Error(`Straico delete RAG error: ${await res.text()}`);
 }
@@ -140,9 +169,9 @@ export async function chatCompletion(
   messages: ChatMessage[],
   model = "openai/gpt-4o-mini"
 ): Promise<string> {
-  const res = await fetch(`${STRAICO_API_URL}/v1/chat/completions`, {
+  const res = await fetch(`${straicoConfig().apiUrl}/v1/chat/completions`, {
     method: "POST",
-    headers,
+    headers: getHeaders(),
     body: JSON.stringify({ models: [model], messages }),
   });
 
@@ -152,28 +181,37 @@ export async function chatCompletion(
   return completion?.completion?.choices?.[0]?.message?.content || "";
 }
 
-// ============ File Upload ============
-
-export async function uploadFile(file: File | Blob, filename?: string): Promise<string> {
-  const formData = new FormData();
-  formData.append("file", file, filename || "transcript.txt");
-
-  const res = await fetch(`${STRAICO_API_URL}/v0/file/upload`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${STRAICO_API_KEY}` },
-    body: formData,
-  });
-
-  if (!res.ok) throw new Error(`Straico file upload error: ${await res.text()}`);
-  const data = await res.json();
-  return data.data?.url || "";
-}
-
 // ============ User Info ============
 
-export async function getUserInfo(): Promise<{ coins: number; plan: string }> {
-  const res = await fetch(`${STRAICO_API_URL}/v0/user`, { headers });
+export async function getUserInfo(): Promise<{ coins: number; plan: string; firstName: string; lastName: string }> {
+  const res = await fetch(`${straicoConfig().apiUrl}/v0/user`, { headers: getHeaders() });
   if (!res.ok) throw new Error(`Straico user info error: ${await res.text()}`);
   const data = await res.json();
-  return { coins: data.data?.coins || 0, plan: data.data?.plan || "" };
+  return {
+    coins: data.data?.coins || 0,
+    plan: data.data?.plan || "",
+    firstName: data.data?.first_name || "",
+    lastName: data.data?.last_name || "",
+  };
+}
+
+// ============ Image Generation ============
+
+export async function generateImage(
+  model: string,
+  prompt: string,
+  size: "square" | "landscape" | "portrait" = "square"
+): Promise<{ url: string; coinsUsed: number }> {
+  const res = await fetch(`${straicoConfig().apiUrl}/v0/image/generation`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ model, description: prompt, size, variations: 1 }),
+  });
+
+  if (!res.ok) throw new Error(`Straico image error: ${await res.text()}`);
+  const data = await res.json();
+  return {
+    url: data.data?.images?.[0]?.url || "",
+    coinsUsed: data.data?.coins_used || 0,
+  };
 }
