@@ -68,15 +68,15 @@ export default function UploadPage() {
 
   const handlePresetApply = (preset: Preset | null) => {
     if (!preset) { setActivePresetName(null); return; }
-    if (preset.settings_json) {
+    if (preset.config_json) {
       try {
-        const config = typeof preset.settings_json === "string"
-          ? JSON.parse(preset.settings_json) : preset.settings_json;
+        const config = typeof preset.config_json === "string"
+          ? JSON.parse(preset.config_json) : preset.config_json;
         applyPreset(config);
       } catch {}
     }
-    setActivePresetName(preset.name);
-    toast.success(`Пресет "${preset.name}" застосовано`);
+    setActivePresetName(preset.title);
+    toast.success(`Пресет "${preset.title}" застосовано`);
   };
 
   return (
