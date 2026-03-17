@@ -16,7 +16,7 @@ function now(): string {
 export async function POST(req: NextRequest) {
   try {
     const session = await ncb.requireAuth(req);
-    const body = await req.json();
+    const body = await req.json() as any;
     const { url, source, workspaceId, settings } = body;
 
     if (!url || !workspaceId) {
@@ -41,9 +41,7 @@ export async function POST(req: NextRequest) {
     // 1. Create transcription record in NCB
     const txRecord = await ncb.create<any>("transcriptions", {
       workspace_id: workspaceId,
-      app_user_id: session.userId,
       original_filename: filename,
-      source_type: "url",
       storage_url: url,
       status: "transcribing",
       salad_mode: saladMode,
