@@ -117,10 +117,17 @@ export interface TranscriptionSettings {
   sentenceTimestamps: boolean;
   wordTimestamps: boolean;
   srt: boolean;
+  sentenceDiarization: boolean;
+  multichannel: boolean;
+  returnAsFile: boolean;
   summarize: number;
   translate: string | null;
   customVocabulary: string | null;
   customPrompt: string | null;
+  llmTranslation: string | null;
+  srtTranslation: string | null;
+  overallSentiment: boolean;
+  overallClassification: boolean;
 }
 
 export interface Preset {
