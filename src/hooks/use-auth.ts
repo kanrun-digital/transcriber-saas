@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
@@ -14,6 +14,7 @@ export function useAuth() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const store = useAuthStore();
+  const provisioningRef = useRef(false);
 
   const sessionQuery = useQuery({
     queryKey: ["session"],
@@ -39,6 +40,10 @@ export function useAuth() {
       return;
     }
 
+    // Prevent double provision calls
+    if (provisioningRef.current) return;
+    provisioningRef.current = true;
+
     // Fetch or auto-provision app_user and workspace
     (async () => {
       try {
@@ -60,11 +65,10 @@ export function useAuth() {
           appUser = result.appUser;
           workspace = result.workspace;
         } else {
-          // Load existing workspace — NCB returns {status, data}, unwrap
+          // Load existing workspace
           const wsRes = await apiGet<{ data: Workspace } | Workspace>(
             API_ROUTES.DATA_RECORD("workspaces", appUser.workspace_id)
           );
-          // Handle both formats: {status, data: Workspace} or direct Workspace
           workspace = (wsRes as any).data?.id ? (wsRes as any).data : wsRes as Workspace;
         }
 
@@ -76,6 +80,7 @@ export function useAuth() {
         store.setWorkspace(null);
       } finally {
         store.setLoading(false);
+        provisioningRef.current = false;
       }
     })();
   }, [sessionQuery.data, sessionQuery.isLoading]);
@@ -84,7 +89,7 @@ export function useAuth() {
     mutationFn: authService.signIn,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["session"] });
-      router.push(ROUTES.DASHBOARD);
+      // Don't push to dashboard here — let useEffect handle it after provision
     },
   });
 
@@ -104,13 +109,18 @@ export function useAuth() {
     },
   });
 
+  // Auto-redirect to dashboard when appUser loads
+  const isAuthenticated = !!store.sessionUser;
+  const isReady = isAuthenticated && !!store.appUser && !!store.workspace;
+
   return {
     sessionUser: store.sessionUser,
     appUser: store.appUser,
     workspace: store.workspace,
     isAdmin: store.isAdmin,
     isLoading: store.isLoading,
-    isAuthenticated: !!store.sessionUser,
+    isAuthenticated,
+    isReady,
     signIn: signInMutation.mutateAsync,
     signUp: signUpMutation.mutateAsync,
     signOut: signOutMutation.mutateAsync,
