@@ -253,7 +253,7 @@ function EditWorkspaceDialog({
               max_rag_bases: maxRagBases,
               max_agents: maxAgents,
               max_members: maxMembers,
-              default_salad_mode: defaultSaladMode as any,
+              default_salad_mode: defaultSaladMode,
             })}
             disabled={isSaving}
           >
@@ -555,7 +555,7 @@ function AdminContent() {
                           {ws.status === "active" ? "Active" : "Suspended"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="hidden md:table-cell">{ws.member_count ?? "—"}</TableCell>
+                      <TableCell className="hidden md:table-cell">{ws.active_member_count ?? "—"}</TableCell>
                       <TableCell className="hidden md:table-cell">
                         {ws.salad_minutes_used ?? 0} / {ws.salad_minutes_limit ?? 0}
                       </TableCell>
@@ -563,7 +563,7 @@ function AdminContent() {
                         {ws.straico_coins_used ?? 0} / {ws.straico_coins_limit ?? 0}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
-                        {ws.transcription_count ?? 0} / {ws.max_transcriptions ?? 0}
+                        {0} / {ws.max_transcriptions ?? 0}
                       </TableCell>
                       <TableCell>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditWorkspace(ws)}>
