@@ -83,7 +83,8 @@ export async function POST(req: NextRequest) {
     jobInput.webhook_url = `${appUrl}/api/transcribe/webhook`;
 
     // 3. Submit to Salad
-    const saladJob = await createTranscriptionJob(jobInput, saladMode);
+   const saladJob = await createTranscriptionJob({ ...jobInput, mode: saladMode } as any);
+
 
     // 4. Update transcription with job ID
     await ncb.update("transcriptions", txId, {
