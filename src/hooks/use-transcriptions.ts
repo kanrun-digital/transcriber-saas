@@ -31,7 +31,7 @@ export function useTranscriptions(params?: {
     staleTime: 10_000,
     select: (data) => ({
       ...data,
-      data: (data.data || []).filter((tx: any) => !tx.deleted_at),
+      data: data.data.filter((tx) => !tx.deleted_at),
     }),
   });
 }
@@ -90,6 +90,6 @@ export function useArtifactUrls(transcriptionId: number | null) {
     queryKey: ["artifacts", transcriptionId],
     queryFn: () => transcriptionsService.getArtifactUrls(transcriptionId!),
     enabled: !!transcriptionId,
-    staleTime: 30 * 60 * 1000, // presigned URLs valid for ~1h
+    staleTime: 30 * 60 * 1000,
   });
 }
