@@ -3,6 +3,12 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .
+# Provide dummy env vars at build time so Next.js doesn't inline undefined
+ENV NCB_INSTANCE=build_placeholder
+ENV NCB_SECRET_KEY=build_placeholder
+ENV NCB_DATA_URL=https://openapi.nocodebackend.com
+ENV NCB_AUTH_URL=https://app.nocodebackend.com/api/user-auth
+ENV NEXT_PUBLIC_APP_URL=https://transcriber.tolqa.com
 RUN npm run build
 
 FROM node:22-alpine AS runner
