@@ -51,8 +51,7 @@ export default function UploadPage() {
         body: JSON.stringify({
           transcriptionId,
           workspaceId: workspace.id,
-          mode: isLiteMode ? "lite" : "full",
-          languageCode: settings.language,
+          settings,
         }),
       });
       if (!res.ok) {
