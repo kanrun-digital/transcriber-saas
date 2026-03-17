@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Download, RefreshCw, Trash2, MessageSquare, Loader2, Play } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, Trash2, MessageSquare, Loader2, Play, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { formatBytes, formatDuration, formatDate } from "@/lib/utils";
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -28,6 +28,7 @@ export default function TranscriptionDetailPage() {
   const { workspaceId } = useWorkspace();
   const { settings, updateSetting, languages, diarizationAvailable } = useTranscriptionSettings();
   const [isStarting, setIsStarting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
 
   const { data: tx, isLoading, error } = useQuery({
@@ -124,6 +125,23 @@ export default function TranscriptionDetailPage() {
       toast.error(err.message || "Помилка запуску");
     } finally {
       setIsStarting(false);
+    }
+  };
+
+  // Cancel transcription
+  const handleCancel = async () => {
+    if (!tx || !confirm("Скасувати транскрипцію? Файл повернеться в статус 'Завантажено' і можна буде перезапустити.")) return;
+    setIsCancelling(true);
+    try {
+      const res = await fetch(`/api/transcriptions/${tx.id}/cancel`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to cancel");
+      toast.success("Транскрипцію скасовано. Можна перезапустити.");
+      queryClient.invalidateQueries({ queryKey: ["transcription", id] });
+    } catch (err: any) {
+      toast.error(err.message || "Помилка скасування");
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -330,6 +348,18 @@ export default function TranscriptionDetailPage() {
             <Loader2 className="w-12 h-12 mx-auto animate-spin text-primary" />
             <p className="mt-4 text-lg font-medium">Транскрипція в процесі...</p>
             <p className="text-sm text-muted-foreground mt-1">Сторінка оновиться автоматично</p>
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={handleCancel}
+              disabled={isCancelling}
+            >
+              {isCancelling ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Скасування...</>
+              ) : (
+                <><XCircle className="w-4 h-4 mr-2" /> Скасувати та перезапустити</>
+              )}
+            </Button>
           </CardContent>
         </Card>
       )}
