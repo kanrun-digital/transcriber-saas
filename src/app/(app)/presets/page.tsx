@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePresets, useCreatePreset, useDeletePreset } from "@/hooks/use-presets";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as presetsService from "@/services/presets";
@@ -169,6 +169,11 @@ function PresetFormDialog({
   isSaving: boolean;
 }) {
   const [form, setForm] = useState<PresetFormData>(preset ? presetToForm(preset) : defaultForm);
+
+  // Reset form when preset changes
+  useEffect(() => {
+    setForm(preset ? presetToForm(preset) : defaultForm);
+  }, [preset]);
 
   const update = <K extends keyof PresetFormData>(key: K, value: PresetFormData[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
