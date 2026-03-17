@@ -69,7 +69,7 @@ export async function POST(
         if (jobStatus === "failed") {
           await ncb.update("transcriptions", txId, {
             status: "failed",
-            error_message: job.error || "Salad job failed",
+            error_message: "Salad job failed",
             updated_at: now(),
           });
 
