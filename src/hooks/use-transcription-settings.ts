@@ -86,12 +86,30 @@ export function useTranscriptionSettings() {
   );
 
   const applyPreset = useCallback(
-    (presetSettings: string) => {
+    (presetConfig: any) => {
       try {
-        const parsed = JSON.parse(presetSettings);
-        setSettings((prev) => ({ ...prev, ...parsed }));
+        const config = typeof presetConfig === "string" ? JSON.parse(presetConfig) : presetConfig;
+        const mapped: Partial<TranscriptionSettings> = {};
+        if (config.language_code) mapped.language = config.language_code;
+        if (config.language) mapped.language = config.language;
+        if (config.diarization !== undefined) mapped.enableDiarization = config.diarization;
+        if (config.sentence_diarization !== undefined) mapped.sentenceDiarization = config.sentence_diarization;
+        if (config.sentence_level_timestamps !== undefined) mapped.sentenceTimestamps = config.sentence_level_timestamps;
+        if (config.word_level_timestamps !== undefined) mapped.wordTimestamps = config.word_level_timestamps;
+        if (config.srt !== undefined) mapped.srt = config.srt;
+        if (config.multichannel !== undefined) mapped.multichannel = config.multichannel;
+        if (config.return_as_file !== undefined) mapped.returnAsFile = config.return_as_file;
+        if (config.summarize !== undefined) mapped.summarize = config.summarize;
+        if (config.translate) mapped.translate = config.translate;
+        if (config.custom_prompt) mapped.customPrompt = config.custom_prompt;
+        if (config.custom_vocabulary) mapped.customVocabulary = config.custom_vocabulary;
+        if (config.llm_translation) mapped.llmTranslation = config.llm_translation;
+        if (config.srt_translation) mapped.srtTranslation = config.srt_translation;
+        if (config.overall_sentiment !== undefined) mapped.overallSentiment = config.overall_sentiment;
+        if (config.overall_classification !== undefined) mapped.overallClassification = config.overall_classification;
+        setSettings((prev) => ({ ...prev, ...mapped }));
       } catch {
-        // Invalid preset JSON, ignore
+        // Invalid preset, ignore
       }
     },
     []
