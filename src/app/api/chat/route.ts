@@ -57,9 +57,6 @@ export async function POST(req: NextRequest) {
         workspace_id: workspaceId,
         owner_user_id: appUser?.id || 0,
         title: message.slice(0, 100),
-        provider: "straico",
-        model_id: selectedModel,
-        context_type: "chat",
       });
       convId = conv.id;
     }
