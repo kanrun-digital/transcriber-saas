@@ -34,8 +34,10 @@ export function useCreatePreset() {
       presetsService.createPreset({
         ...data,
         workspace_id: workspace!.id,
-        is_active: 0,
+        app_user_id: useAuthStore.getState().appUser!.id,
+        is_active: 1,
       }),
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["presets"] });
       toast.success("Пресет створено");
