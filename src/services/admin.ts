@@ -46,6 +46,14 @@ export async function deleteTranscription(txId: number): Promise<void> {
 
 // ============ Workspaces ============
 
+export async function listAllWorkspaces(): Promise<PaginatedResponse<Workspace>> {
+  return apiGet<PaginatedResponse<Workspace>>(API_ROUTES.DATA("workspaces"), {
+    limit: 200,
+    sort: "created_at",
+    order: "desc",
+  });
+}
+
 export async function updateWorkspace(
   workspaceId: number,
   data: Partial<Pick<Workspace,
