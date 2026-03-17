@@ -26,7 +26,7 @@ export default function TranscriptionDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { workspaceId } = useWorkspace();
-  const { settings, updateSetting } = useTranscriptionSettings();
+  const { settings, updateSetting, languages, diarizationAvailable } = useTranscriptionSettings();
   const [isStarting, setIsStarting] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
 
@@ -249,7 +249,7 @@ export default function TranscriptionDetailPage() {
             )}
 
             {/* Settings panel */}
-            <TranscriptionSettingsPanel settings={settings} onUpdate={updateSetting} />
+            <TranscriptionSettingsPanel settings={settings} languages={languages as { value: string; label: string }[]} diarizationAvailable={diarizationAvailable} onUpdate={updateSetting} />
 
             {/* Start button */}
             <Button
