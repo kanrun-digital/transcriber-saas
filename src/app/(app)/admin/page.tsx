@@ -243,8 +243,8 @@ function EditWorkspaceDialog({
           <Button variant="outline" onClick={onClose}>Скасувати</Button>
           <Button
             onClick={() => onSave({
-              plan,
-              status,
+              plan: plan as any,
+              status: status as any,
               salad_minutes_limit: saladMinutesLimit,
               straico_coins_limit: straicoCoinsLimit,
               max_transcriptions: maxTranscriptions,
