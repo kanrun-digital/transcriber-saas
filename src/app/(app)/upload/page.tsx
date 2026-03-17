@@ -16,52 +16,147 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload as UploadIcon, Link2, Mic, CheckCircle2, Loader2 } from "lucide-react";
+import { Upload as UploadIcon, Link2, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Preset } from "@/types";
 
-type UploadMode = "file" | "url" | "voice";
+type UploadMode = "file" | "url";
+
+// ============ URL helpers ============
+
+function convertToDirectUrl(url: string): { directUrl: string; source: string } | { error: string } {
+  const trimmed = url.trim();
+
+  // Google Drive
+  const driveMatch = trimmed.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (driveMatch) {
+    return {
+      directUrl: `https://drive.google.com/uc?export=download&id=${driveMatch[1]}`,
+      source: "Google Drive",
+    };
+  }
+
+  // Dropbox
+  if (trimmed.includes("dropbox.com/")) {
+    const directUrl = trimmed.includes("dl=0")
+      ? trimmed.replace("dl=0", "dl=1")
+      : trimmed.includes("dl=")
+        ? trimmed
+        : trimmed + (trimmed.includes("?") ? "&dl=1" : "?dl=1");
+    return { directUrl, source: "Dropbox" };
+  }
+
+  // Direct URL — check if it looks like a media file or just pass through
+  try {
+    new URL(trimmed);
+  } catch {
+    return { error: "Некоректна URL адреса" };
+  }
+
+  // Check for folders (not files)
+  if (trimmed.includes("drive.google.com/drive/folders")) {
+    return { error: "Це посилання на папку, не на файл. Вставте посилання на конкретний файл." };
+  }
+
+  return { directUrl: trimmed, source: "Direct URL" };
+}
 
 export default function UploadPage() {
   const router = useRouter();
   const { workspace } = useWorkspace();
   const [activeTab, setActiveTab] = useState<UploadMode>("file");
   const [urlInput, setUrlInput] = useState("");
+  const [urlResult, setUrlResult] = useState<{ directUrl: string; source: string } | null>(null);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [isUrlLoading, setIsUrlLoading] = useState(false);
   const [activePresetName, setActivePresetName] = useState<string | null>(null);
 
   const { startUpload, phase, progress, file, transcriptionId, error, cancelUpload, reset } = useUpload();
   const { settings, languages, diarizationAvailable, updateSetting, applyPreset } = useTranscriptionSettings();
-  const isLiteMode = settings.saladMode === "lite";
 
   const isUploading = phase === "uploading" || phase === "presigning" || phase === "completing";
   const isDone = phase === "done";
   const isError = phase === "error";
 
+  // Show settings panel when file uploaded OR URL validated
+  const showSettings = isDone || urlResult !== null;
+
   const handleFileSelect = (selectedFile: File) => {
     startUpload(selectedFile);
   };
 
+  // URL validation
+  const handleUrlCheck = () => {
+    setUrlError(null);
+    setUrlResult(null);
+    if (!urlInput.trim()) {
+      setUrlError("Вставте посилання на файл");
+      return;
+    }
+    const result = convertToDirectUrl(urlInput);
+    if ("error" in result) {
+      setUrlError(result.error);
+    } else {
+      setUrlResult(result);
+      toast.success(`${result.source} — посилання конвертовано`);
+    }
+  };
+
   const handleStartTranscription = async () => {
-    if (!transcriptionId || !workspace) return;
-    try {
-      const res = await fetch("/api/upload/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          transcriptionId,
-          workspaceId: workspace.id,
-          settings,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Помилка створення задачі");
+    if (!workspace) return;
+
+    // File mode
+    if (activeTab === "file" && transcriptionId) {
+      try {
+        const res = await fetch("/api/upload/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            transcriptionId,
+            workspaceId: workspace.id,
+            settings,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Помилка створення задачі");
+        }
+        toast.success("Транскрипція запущена!");
+        router.push(`/transcriptions/${transcriptionId}`);
+      } catch (err: any) {
+        toast.error(err.message);
       }
-      toast.success("Транскрипція запущена!");
-      router.push(`/transcriptions/${transcriptionId}`);
-    } catch (err: any) {
-      toast.error(err.message);
+      return;
+    }
+
+    // URL mode
+    if (activeTab === "url" && urlResult) {
+      setIsUrlLoading(true);
+      try {
+        const res = await fetch("/api/upload/from-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            url: urlResult.directUrl,
+            source: urlResult.source,
+            workspaceId: workspace.id,
+            settings,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Помилка завантаження з URL");
+        }
+        const data = await res.json();
+        toast.success("Транскрипція з URL запущена!");
+        router.push(`/transcriptions/${data.transcriptionId}`);
+      } catch (err: any) {
+        toast.error(err.message);
+      } finally {
+        setIsUrlLoading(false);
+      }
     }
   };
 
@@ -78,63 +173,119 @@ export default function UploadPage() {
     toast.success(`Пресет "${preset.title}" застосовано`);
   };
 
+  const handleReset = () => {
+    reset();
+    setUrlInput("");
+    setUrlResult(null);
+    setUrlError(null);
+    setActivePresetName(null);
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Завантаження файлу</h1>
-        <p className="text-muted-foreground">Виберіть спосіб завантаження та налаштуйте параметри транскрипції</p>
+        <h1 className="text-3xl font-bold">Завантаження</h1>
+        <p className="text-muted-foreground">Виберіть файл або вставте посилання на аудіо/відео</p>
         {activePresetName && <Badge variant="secondary" className="mt-2">Пресет: {activePresetName}</Badge>}
       </div>
 
-      {phase === "idle" && (
+      {/* Step 1: Choose source */}
+      {!showSettings && (
         <Card>
-          <CardHeader><CardTitle>Крок 1: Вибір файлу</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Крок 1: Джерело файлу</CardTitle></CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as UploadMode)}>
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="file"><UploadIcon className="w-4 h-4 mr-2" />Файл</TabsTrigger>
-                <TabsTrigger value="url"><Link2 className="w-4 h-4 mr-2" />URL</TabsTrigger>
-                <TabsTrigger value="voice"><Mic className="w-4 h-4 mr-2" />Голос</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="file"><UploadIcon className="w-4 h-4 mr-2" />Файл з комп'ютера</TabsTrigger>
+                <TabsTrigger value="url"><Link2 className="w-4 h-4 mr-2" />Посилання (URL)</TabsTrigger>
               </TabsList>
+
               <TabsContent value="file" className="space-y-4 mt-4">
                 <FileDropzone onFileSelect={handleFileSelect} file={file} onClear={reset} />
               </TabsContent>
+
               <TabsContent value="url" className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label>URL адреса</Label>
-                  <div className="flex gap-2">
-                    <Input value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="https://example.com/file.mp3" />
-                    <Button variant="secondary" onClick={() => { if (urlInput.trim()) toast.info("URL завантаження — скоро"); }}>Перевірити</Button>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>Посилання на файл</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={urlInput}
+                        onChange={(e) => { setUrlInput(e.target.value); setUrlError(null); setUrlResult(null); }}
+                        placeholder="https://drive.google.com/file/d/.../view або пряме посилання"
+                        onKeyDown={(e) => e.key === "Enter" && handleUrlCheck()}
+                      />
+                      <Button variant="secondary" onClick={handleUrlCheck}>Перевірити</Button>
+                    </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Підтримуються: Google Drive, Dropbox, прямі посилання на аудіо/відео файли.
+                    Система автоматично конвертує в пряме посилання для завантаження.
+                  </p>
+                  {urlError && (
+                    <Alert variant="destructive"><AlertDescription>{urlError}</AlertDescription></Alert>
+                  )}
+                  {urlResult && (
+                    <Alert>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <AlertDescription>
+                        <strong>{urlResult.source}</strong> — посилання готове до обробки
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
-              </TabsContent>
-              <TabsContent value="voice" className="py-12 text-center mt-4">
-                <Mic className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Запис голосу — скоро</p>
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
       )}
 
+      {/* Upload progress (file mode) */}
       {(isUploading || isError) && (
         <UploadProgress phase={phase} progress={progress} error={error} fileName={file?.name || ""} onCancel={cancelUpload} onReset={reset} />
       )}
 
-      {isDone && (
+      {/* Step 2: Settings (shown after file upload OR URL validation) */}
+      {showSettings && (
         <>
-          <Alert><CheckCircle2 className="h-4 w-4" /><AlertDescription>Файл <strong>{file?.name}</strong> завантажено!</AlertDescription></Alert>
+          {isDone && file && (
+            <Alert><CheckCircle2 className="h-4 w-4" /><AlertDescription>Файл <strong>{file.name}</strong> завантажено!</AlertDescription></Alert>
+          )}
+          {urlResult && (
+            <Alert><CheckCircle2 className="h-4 w-4" /><AlertDescription><strong>{urlResult.source}</strong> — {urlResult.directUrl.substring(0, 60)}...</AlertDescription></Alert>
+          )}
+
           <Card>
-            <CardHeader><CardTitle>Крок 2: Налаштування</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Крок 2: Налаштування транскрипції</CardTitle></CardHeader>
             <CardContent className="space-y-6">
+              {/* Preset selector */}
               <div className="space-y-2">
-                <Label className="text-base font-semibold">Пресети</Label>
+                <Label className="text-base font-semibold">Пресет (необов'язково)</Label>
                 <PresetSelector onPresetSelect={handlePresetApply} />
               </div>
-              <TranscriptionSettingsPanel settings={settings} languages={languages as { value: string; label: string }[]} diarizationAvailable={diarizationAvailable} onUpdate={updateSetting} />
+
+              {/* Settings panel */}
+              <TranscriptionSettingsPanel
+                settings={settings}
+                languages={languages as { value: string; label: string }[]}
+                diarizationAvailable={diarizationAvailable}
+                onUpdate={updateSetting}
+              />
+
+              {/* Actions */}
               <div className="flex gap-2 pt-4">
-                <Button variant="outline" onClick={reset}>Назад</Button>
-                <Button onClick={handleStartTranscription} className="flex-1">Почати транскрипцію</Button>
+                <Button variant="outline" onClick={handleReset}>Назад</Button>
+                <Button
+                  onClick={handleStartTranscription}
+                  className="flex-1"
+                  disabled={isUrlLoading}
+                >
+                  {isUrlLoading ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Відправляю...</>
+                  ) : (
+                    "Почати транскрипцію"
+                  )}
+                </Button>
               </div>
             </CardContent>
           </Card>
