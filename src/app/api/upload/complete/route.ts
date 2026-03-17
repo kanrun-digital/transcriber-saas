@@ -77,15 +77,17 @@ export async function POST(req: NextRequest) {
       salad_mode: saladMode,
     });
 
-    // 8. Log storage event
+    // 8. Log storage event (non-critical)
     if (tx.storage_file_id) {
-      await ncb.create("storage_file_events", {
-        workspace_id: workspaceId,
-        storage_file_id: tx.storage_file_id,
-        event_type: "upload",
-        event_status: "completed",
-        details_json: JSON.stringify({ salad_job_id: job.id, mode: saladMode }),
-      });
+      try {
+        await ncb.create("storage_file_events", {
+          workspace_id: workspaceId,
+          storage_file_id: tx.storage_file_id,
+          event_type: "upload",
+          event_status: "completed",
+          details_json: JSON.stringify({ salad_job_id: job.id, mode: saladMode }),
+        });
+      } catch (e) { console.warn("[Complete] Event log failed (non-critical):", e); }
     }
 
     console.log(`[Upload/Complete] tx=${transcriptionId} → Salad job ${job.id} (${saladMode})`);
