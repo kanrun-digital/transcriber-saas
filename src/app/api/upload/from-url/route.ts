@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as ncb from "@/lib/ncb";
 import { createTranscriptionJob } from "@/lib/salad";
+import { checkTranscriptionLimit } from "@/lib/usage";
 import type { SaladMode } from "@/types";
 
 function now(): string {
@@ -37,6 +38,15 @@ export async function POST(req: NextRequest) {
     } catch {}
 
     const saladMode: SaladMode = settings?.saladMode || "full";
+
+    // Check transcription limits
+    const usageCheck = await checkTranscriptionLimit(workspaceId, 0);
+    if (!usageCheck.allowed) {
+      return NextResponse.json({
+        error: usageCheck.reason || "Ліміт транскрипцій вичерпано. Оновіть план.",
+        usage: { used: usageCheck.used, limit: usageCheck.limit },
+      }, { status: 429 });
+    }
 
     // 1. Create transcription record in NCB
     const txRecord = await ncb.create<any>("transcriptions", {
@@ -83,8 +93,7 @@ export async function POST(req: NextRequest) {
     jobInput.webhook_url = `${appUrl}/api/transcribe/webhook`;
 
     // 3. Submit to Salad
-   const saladJob = await createTranscriptionJob({ ...jobInput, mode: saladMode } as any);
-
+    const saladJob = await createTranscriptionJob({ ...jobInput, mode: saladMode } as any);
 
     // 4. Update transcription with job ID
     await ncb.update("transcriptions", txId, {
