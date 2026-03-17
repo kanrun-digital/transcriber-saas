@@ -40,13 +40,13 @@ export async function POST(
 
         if (jobStatus === "succeeded") {
           // Job actually completed! Save the result
-          const output = job.output || {};
-          const text = output.text || output.transcript || "";
+          const output = job.output || {} as any;
+          const text = output.text || "";
           const summary = output.summary || null;
           const srt = output.srt || null;
           const wordCount = text ? text.split(/\s+/).filter(Boolean).length : 0;
-          const numSpeakers = output.num_speakers || output.speakers?.length || null;
-          const detectedLang = output.detected_language || output.language || null;
+          const numSpeakers = output.num_speakers || null;
+          const detectedLang = output.detected_language || null;
 
           await ncb.update("transcriptions", txId, {
             status: "completed",
