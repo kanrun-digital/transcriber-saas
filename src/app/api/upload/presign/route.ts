@@ -101,17 +101,25 @@ export async function POST(req: NextRequest) {
       status: "uploaded",
     });
 
-    // Update storage usage
-    await recordStorageUsage(workspaceId, size);
+    // Update storage usage (non-critical)
+    try {
+      await recordStorageUsage(workspaceId, size);
+    } catch (e) {
+      console.warn("[Presign] Storage usage update failed (non-critical):", e);
+    }
 
-    // Log event
-    await ncb.create("storage_file_events", {
-      workspace_id: workspaceId,
-      storage_file_id: storageFile.id,
-      event_type: "upload",
-      event_status: "started",
-      details_json: JSON.stringify({ filename, contentType, size, salad_mode: mode }),
-    });
+    // Log event (non-critical, don't block upload)
+    try {
+      await ncb.create("storage_file_events", {
+        workspace_id: workspaceId,
+        storage_file_id: storageFile.id,
+        event_type: "upload",
+        event_status: "started",
+        details_json: JSON.stringify({ filename, contentType, size, salad_mode: mode }),
+      });
+    } catch (e) {
+      console.warn("[Presign] Event logging failed (non-critical):", e);
+    }
 
     return NextResponse.json({
       uploadUrl,
