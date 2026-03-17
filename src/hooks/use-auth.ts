@@ -43,15 +43,16 @@ export function useAuth() {
     (async () => {
       try {
         // Try to find existing app_user
-        const appUsers = await apiGet<{ data: AppUser[] }>(API_ROUTES.DATA("app_users"), {
+        const appUsersRes = await apiGet<{ data: AppUser[] }>(API_ROUTES.DATA("app_users"), {
           ncb_user_id: user.id,
           limit: 1,
         });
-        let appUser = appUsers.data?.[0] ?? null;
+        let appUser = appUsersRes.data?.[0] ?? null;
         let workspace: Workspace | null = null;
 
         if (!appUser) {
-          // Auto-provision: create app_user + workspace + workspace_member
+          // Auto-provision: create app_user + workspace
+          console.log("[auth] No app_user found, auto-provisioning...");
           const result = await apiPost<{ appUser: AppUser; workspace: Workspace }>(
             "/api/auth/provision",
             { ncbUserId: user.id, email: user.email, name: user.name }
@@ -59,10 +60,12 @@ export function useAuth() {
           appUser = result.appUser;
           workspace = result.workspace;
         } else {
-          // Load existing workspace
-          workspace = await apiGet<Workspace>(
+          // Load existing workspace — NCB returns {status, data}, unwrap
+          const wsRes = await apiGet<{ data: Workspace } | Workspace>(
             API_ROUTES.DATA_RECORD("workspaces", appUser.workspace_id)
           );
+          // Handle both formats: {status, data: Workspace} or direct Workspace
+          workspace = (wsRes as any).data?.id ? (wsRes as any).data : wsRes as Workspace;
         }
 
         store.setAppUser(appUser);
