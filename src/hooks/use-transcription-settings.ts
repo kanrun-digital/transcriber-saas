@@ -16,10 +16,17 @@ const DEFAULT_SETTINGS: TranscriptionSettings = {
   sentenceTimestamps: true,
   wordTimestamps: false,
   srt: true,
+  sentenceDiarization: true,
+  multichannel: false,
+  returnAsFile: true,
   summarize: 200,
   translate: null,
   customVocabulary: null,
   customPrompt: null,
+  llmTranslation: null,
+  srtTranslation: null,
+  overallSentiment: false,
+  overallClassification: false,
 };
 
 export function useTranscriptionSettings() {
