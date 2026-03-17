@@ -1,31 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const NCB_DATA_URL = process.env.NCB_DATA_URL || "https://openapi.nocodebackend.com";
-const NCB_INSTANCE = process.env.NCB_INSTANCE!;
-const NCB_SECRET = process.env.NCB_SECRET_KEY!;
-
 /**
  * Data proxy: /api/data/[...path]
  * 
  * Proxies CRUD requests to NCB data API.
- * Forwards user cookies for RLS enforcement.
- * 
- * Examples:
- *   GET  /api/data/read/transcriptions?workspace_id=1&status=completed
- *   POST /api/data/create/transcriptions
- *   PUT  /api/data/update/transcriptions/42
- *   DELETE /api/data/delete/transcriptions/42
- *   POST /api/data/search/transcriptions
+ * NCB Data API requires Instance as QUERY PARAM (not header).
  */
 
 async function proxyData(req: NextRequest, path: string) {
-  // Build target URL with query params
-  const search = req.nextUrl.search;
-  const url = `${NCB_DATA_URL}/${path}${search}`;
+  const dataUrl = process.env["NCB_DATA_URL"] || "https://openapi.nocodebackend.com";
+  const instance = process.env["NCB_INSTANCE"] || "";
+  const secret = process.env["NCB_SECRET_KEY"] || "";
+
+  // Build target URL — append Instance as query param
+  const url = new URL(`${dataUrl}/${path}`);
+  
+  // Copy existing query params from request
+  req.nextUrl.searchParams.forEach((val, key) => {
+    url.searchParams.set(key, val);
+  });
+  
+  // Add Instance query param
+  url.searchParams.set("Instance", instance);
 
   const headers: Record<string, string> = {
-    "X-Database-Instance": NCB_INSTANCE,
-    Authorization: `Bearer ${NCB_SECRET}`,
+    Authorization: `Bearer ${secret}`,
   };
 
   const ct = req.headers.get("content-type");
@@ -44,7 +43,7 @@ async function proxyData(req: NextRequest, path: string) {
     fetchOptions.body = await req.text();
   }
 
-  const res = await fetch(url, fetchOptions);
+  const res = await fetch(url.toString(), fetchOptions);
   const body = await res.text();
 
   return new NextResponse(body, {
@@ -72,4 +71,3 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ p
   const { path } = await params;
   return proxyData(req, path.join("/"));
 }
-
