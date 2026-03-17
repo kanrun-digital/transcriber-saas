@@ -32,6 +32,10 @@ export async function deleteTranscription(id: number): Promise<{ ok: boolean; wa
   return apiDelete(API_ROUTES.TRANSCRIPTION(id));
 }
 
+export async function cancelTranscription(id: number): Promise<{ ok: boolean }> {
+  return apiPost(`/api/transcriptions/${id}/cancel`, {});
+}
+
 export async function syncRag(transcriptionId: number, workspaceId: number): Promise<{ ok: boolean }> {
   return apiPost(API_ROUTES.RAG_SYNC, { transcriptionId, workspaceId });
 }
@@ -51,6 +55,7 @@ export const transcriptionsService = {
   list: listTranscriptions,
   getById: getTranscription,
   delete: deleteTranscription,
+  cancel: cancelTranscription,
   syncRag,
   getArtifactUrls,
 };
