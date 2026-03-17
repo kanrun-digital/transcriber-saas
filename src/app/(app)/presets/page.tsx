@@ -180,14 +180,18 @@ function PresetFormDialog({
   };
 
   const isEditing = !!preset;
+  const isPublic = preset?.is_public === 1;
+  const dialogTitle = isPublic ? "Переглянути пресет" : isEditing ? "Редагувати пресет" : "Новий пресет";
+  const dialogDesc = isPublic ? "Скопіюйте в 'Мої' щоб змінити" : isEditing ? "Змініть налаштування пресету" : "Створіть новий набір налаштувань транскрипції";
+  const buttonText = isPublic ? "Копіювати в Мої" : isEditing ? "Зберегти" : "Створити";
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Редагувати пресет" : "Новий пресет"}</DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>
-            {isEditing ? "Змініть налаштування пресету" : "Створіть новий набір налаштувань транскрипції"}
+            {dialogDesc}
           </DialogDescription>
         </DialogHeader>
 
@@ -368,7 +372,7 @@ function PresetFormDialog({
           <Button variant="outline" onClick={onClose}>Скасувати</Button>
           <Button onClick={() => onSave(form)} disabled={isSaving || !form.title.trim()}>
             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEditing ? "Зберегти" : "Створити"}
+            {buttonText}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -410,6 +414,18 @@ export default function PresetsPage() {
 
   const handleEdit = (form: PresetFormData) => {
     if (!editPreset) return;
+    // If public preset — clone to "My", don't edit original
+    if (editPreset.is_public === 1) {
+      const payload = formToPayload(form);
+      payload.title = form.title.includes("(копія)") ? form.title : `${form.title} (копія)`;
+      createPreset.mutate({ ...payload, is_public: 0 } as any, {
+        onSuccess: () => {
+          setEditPreset(null);
+          toast.success("Пресет скопійовано в 'Мої'");
+        },
+      });
+      return;
+    }
     updatePresetMut.mutate({ id: editPreset.id, data: formToPayload(form) });
   };
 
