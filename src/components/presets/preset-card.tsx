@@ -25,7 +25,7 @@ export function PresetCard({ preset, onDelete, onSelect, isDeleting }: PresetCar
       <CardContent className="p-4 space-y-2">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
-            <h4 className="font-semibold">{preset.name}</h4>
+            <h4 className="font-semibold">{preset.title}</h4>
             {preset.description && (
               <p className="text-sm text-muted-foreground line-clamp-2">
                 {preset.description}
@@ -57,7 +57,7 @@ export function PresetCard({ preset, onDelete, onSelect, isDeleting }: PresetCar
               {category.icon} {category.label}
             </span>
           )}
-          {preset.is_default === 1 && (
+          {preset.is_active === 1 && (
             <Badge variant="outline" className="text-xs">
               За замовчуванням
             </Badge>
