@@ -29,6 +29,10 @@ export function useTranscriptions(params?: {
       }),
     enabled: !!workspaceId,
     staleTime: 10_000,
+    select: (data) => ({
+      ...data,
+      data: (data.data || []).filter((tx: any) => !tx.deleted_at),
+    }),
   });
 }
 
