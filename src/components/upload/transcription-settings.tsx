@@ -262,6 +262,9 @@ export function TranscriptionSettingsPanel({
                   <SelectItem value="100">~100 слів</SelectItem>
                   <SelectItem value="200">~200 слів</SelectItem>
                   <SelectItem value="500">~500 слів</SelectItem>
+                  <SelectItem value="1000">~1000 слів</SelectItem>
+                  <SelectItem value="2000">~2000 слів</SelectItem>
+                  <SelectItem value="3000">~3000 слів</SelectItem>
                 </SelectContent>
               </Select>
             </div>
