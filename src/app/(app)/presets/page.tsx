@@ -18,7 +18,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Globe, User, FileText, Zap, Plus, Loader2 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Globe, User, FileText, Zap, Plus, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { PRESET_CATEGORIES, FULL_MODE_LANGUAGES } from "@/constants/languages";
 import type { Preset } from "@/types";
@@ -30,7 +31,21 @@ interface PresetFormData {
   transcription_type: "full" | "lite";
   language: string;
   diarization: boolean;
+  sentenceDiarization: boolean;
   numSpeakers: number;
+  srt: boolean;
+  sentenceTimestamps: boolean;
+  wordTimestamps: boolean;
+  multichannel: boolean;
+  returnAsFile: boolean;
+  summarize: number;
+  translate: string;
+  llmTranslation: string;
+  srtTranslation: string;
+  overallSentiment: boolean;
+  overallClassification: boolean;
+  customPrompt: string;
+  customVocabulary: string;
   is_active: number;
 }
 
@@ -41,41 +56,101 @@ const defaultForm: PresetFormData = {
   transcription_type: "full",
   language: "uk",
   diarization: true,
+  sentenceDiarization: true,
   numSpeakers: 2,
+  srt: true,
+  sentenceTimestamps: true,
+  wordTimestamps: false,
+  multichannel: false,
+  returnAsFile: true,
+  summarize: 200,
+  translate: "",
+  llmTranslation: "",
+  srtTranslation: "",
+  overallSentiment: false,
+  overallClassification: false,
+  customPrompt: "",
+  customVocabulary: "",
   is_active: 0,
 };
 
 function presetToForm(preset: Preset): PresetFormData {
-  let settings: any = {};
+  let config: any = {};
   try {
-    settings = typeof preset.config_json === "string"
-      ? JSON.parse(preset.config_json) : preset.config_json;
+    config = typeof preset.config_json === "string"
+      ? JSON.parse(preset.config_json) : (preset.config_json || {});
   } catch {}
   return {
     title: preset.title,
     description: preset.description || "",
     category: preset.category || "business",
     transcription_type: preset.transcription_type || "full",
-    language: settings.language || "uk",
-    diarization: settings.diarization ?? true,
-    numSpeakers: settings.numSpeakers ?? 2,
+    language: config.language_code || config.language || "uk",
+    diarization: config.diarization ?? true,
+    sentenceDiarization: config.sentence_diarization ?? true,
+    numSpeakers: config.numSpeakers ?? 2,
+    srt: config.srt ?? true,
+    sentenceTimestamps: config.sentence_level_timestamps ?? true,
+    wordTimestamps: config.word_level_timestamps ?? false,
+    multichannel: config.multichannel ?? false,
+    returnAsFile: config.return_as_file ?? true,
+    summarize: config.summarize ?? 0,
+    translate: config.translate || "",
+    llmTranslation: config.llm_translation || "",
+    srtTranslation: config.srt_translation || "",
+    overallSentiment: config.overall_sentiment ?? false,
+    overallClassification: config.overall_classification ?? false,
+    customPrompt: config.custom_prompt || "",
+    customVocabulary: config.custom_vocabulary || "",
     is_active: preset.is_active,
   };
 }
 
 function formToPayload(form: PresetFormData) {
+  const config: any = {
+    language_code: form.language,
+    diarization: form.diarization,
+    sentence_diarization: form.sentenceDiarization,
+    numSpeakers: form.numSpeakers,
+    srt: form.srt,
+    sentence_level_timestamps: form.sentenceTimestamps,
+    word_level_timestamps: form.wordTimestamps,
+    multichannel: form.multichannel,
+    return_as_file: form.returnAsFile,
+  };
+  if (form.summarize > 0) config.summarize = form.summarize;
+  if (form.translate) config.translate = form.translate;
+  if (form.llmTranslation) config.llm_translation = form.llmTranslation;
+  if (form.srtTranslation) config.srt_translation = form.srtTranslation;
+  if (form.overallSentiment) config.overall_sentiment = true;
+  if (form.overallClassification) config.overall_classification = true;
+  if (form.customPrompt.trim()) config.custom_prompt = form.customPrompt.trim();
+  if (form.customVocabulary.trim()) config.custom_vocabulary = form.customVocabulary.trim();
+
   return {
     title: form.title,
     description: form.description || undefined,
     category: form.category,
     transcription_type: form.transcription_type,
-    config_json: JSON.stringify({
-      language: form.language,
-      diarization: form.diarization,
-      numSpeakers: form.numSpeakers,
-    }),
+    config_json: JSON.stringify(config),
     is_active: form.is_active,
   };
+}
+
+// ============ Collapsible Section ============
+
+function Section({ title, defaultOpen, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
+  return (
+    <div className="border rounded-lg">
+      <button type="button" className="flex items-center justify-between w-full px-4 py-3 text-sm font-medium"
+        onClick={() => setOpen(!open)}>
+        {title}
+        {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+      </button>
+      {open && <div className="px-4 pb-4 space-y-4">{children}</div>}
+    </div>
+  );
 }
 
 // ============ Preset Form Dialog ============
@@ -99,12 +174,11 @@ function PresetFormDialog({
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  // Reset form when preset changes
   const isEditing = !!preset;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Редагувати пресет" : "Новий пресет"}</DialogTitle>
           <DialogDescription>
@@ -113,6 +187,7 @@ function PresetFormDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {/* Basic info */}
           <div className="space-y-2">
             <Label>Назва *</Label>
             <Input value={form.title} onChange={(e) => update("title", e.target.value)} placeholder="Інтерв'ю UA" />
@@ -169,15 +244,119 @@ function PresetFormDialog({
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <Label>Діаризація (розділення спікерів)</Label>
-            <Switch checked={form.diarization} onCheckedChange={(v) => update("diarization", v)} />
+          {/* Toggles */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Діаризація (розділення спікерів)</Label>
+              <Switch checked={form.diarization} onCheckedChange={(v) => update("diarization", v)} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>Діаризація по реченнях</Label>
+              <Switch checked={form.sentenceDiarization} onCheckedChange={(v) => update("sentenceDiarization", v)} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>SRT субтитри</Label>
+              <Switch checked={form.srt} onCheckedChange={(v) => update("srt", v)} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>За замовчуванням</Label>
+              <Switch checked={form.is_active === 1} onCheckedChange={(v) => update("is_active", v ? 1 : 0)} />
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <Label>За замовчуванням</Label>
-            <Switch checked={form.is_active === 1} onCheckedChange={(v) => update("is_active", v ? 1 : 0)} />
+          {/* Custom Prompt — MAIN FEATURE */}
+          <div className="space-y-2">
+            <Label className="text-base font-semibold">Custom Prompt</Label>
+            <Textarea
+              value={form.customPrompt}
+              onChange={(e) => update("customPrompt", e.target.value)}
+              placeholder="Інструкції для AI обробки транскрипції. Наприклад: Створіть show notes з таймкодами та ключовими тезами..."
+              rows={6}
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Промпт передається в Salad AI для постобробки тексту. Підтримує форматування, структуру, інструкції.
+            </p>
           </div>
+
+          {/* Output section */}
+          <Section title="Вивід (Output)" defaultOpen={false}>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Часові мітки речень</Label>
+                <Switch checked={form.sentenceTimestamps} onCheckedChange={(v) => update("sentenceTimestamps", v)} />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>Часові мітки слів</Label>
+                <Switch checked={form.wordTimestamps} onCheckedChange={(v) => update("wordTimestamps", v)} />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>Мультиканальний аудіо</Label>
+                <Switch checked={form.multichannel} onCheckedChange={(v) => update("multichannel", v)} />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>Повернути як файл</Label>
+                <Switch checked={form.returnAsFile} onCheckedChange={(v) => update("returnAsFile", v)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Summarize (кількість слів)</Label>
+                <Select value={String(form.summarize)} onValueChange={(v) => update("summarize", Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Без резюме</SelectItem>
+                    <SelectItem value="80">~80 слів</SelectItem>
+                    <SelectItem value="120">~120 слів</SelectItem>
+                    <SelectItem value="200">~200 слів</SelectItem>
+                    <SelectItem value="500">~500 слів</SelectItem>
+                    <SelectItem value="1000">~1000 слів</SelectItem>
+                    <SelectItem value="2000">~2000 слів</SelectItem>
+                    <SelectItem value="3000">~3000 слів</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </Section>
+
+          {/* AI Processing */}
+          {form.transcription_type === "full" && (
+            <Section title="AI-обробка" defaultOpen={false}>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label>Переклад тексту</Label>
+                  <Select value={form.translate || "none"} onValueChange={(v) => update("translate", v === "none" ? "" : v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Без перекладу</SelectItem>
+                      <SelectItem value="to_eng">На англійську</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>LLM переклад (мови через кому)</Label>
+                  <Input value={form.llmTranslation} onChange={(e) => update("llmTranslation", e.target.value)}
+                    placeholder="english, french, german, spanish" />
+                </div>
+                <div className="space-y-2">
+                  <Label>SRT переклад (мови через кому)</Label>
+                  <Input value={form.srtTranslation} onChange={(e) => update("srtTranslation", e.target.value)}
+                    placeholder="english, french, german" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Визначення настрою</Label>
+                  <Switch checked={form.overallSentiment} onCheckedChange={(v) => update("overallSentiment", v)} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Класифікація контенту</Label>
+                  <Switch checked={form.overallClassification} onCheckedChange={(v) => update("overallClassification", v)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Custom Vocabulary</Label>
+                  <Input value={form.customVocabulary} onChange={(e) => update("customVocabulary", e.target.value)}
+                    placeholder="Технічні терміни через кому" />
+                </div>
+              </div>
+            </Section>
+          )}
         </div>
 
         <DialogFooter>
