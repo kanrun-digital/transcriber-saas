@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +23,8 @@ import { toast } from "sonner";
 type AuthMode = "email" | "otp";
 
 export default function LoginPage() {
-  const { signIn, isSigningIn, signInError } = useAuth();
+  const router = useRouter();
+  const { signIn, isSigningIn, signInError, isReady, isAuthenticated, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<AuthMode>("email");
@@ -30,10 +32,21 @@ export default function LoginPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [justSignedIn, setJustSignedIn] = useState(false);
+
+  // Redirect to dashboard when auth is fully ready (after provision)
+  useEffect(() => {
+    if (isReady && !isLoading) {
+      router.push(ROUTES.DASHBOARD);
+    }
+  }, [isReady, isLoading, router]);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await signIn({ email, password });
+    try {
+      await signIn({ email, password });
+      setJustSignedIn(true);
+    } catch {}
   };
 
   const handleGoogleSignIn = async () => {
@@ -100,7 +113,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Невірний код");
-      // Reload session
+      // Reload to trigger session query → provision → redirect
       window.location.href = ROUTES.DASHBOARD;
     } catch (err: any) {
       toast.error(err.message);
@@ -108,6 +121,18 @@ export default function LoginPage() {
       setOtpLoading(false);
     }
   };
+
+  // Show loading while provisioning after sign-in
+  if (justSignedIn && isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Loader2 className="w-8 h-8 mx-auto animate-spin text-primary" />
+          <p className="mt-4 text-muted-foreground">Підготовка акаунту...</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -178,26 +203,13 @@ export default function LoginPage() {
           <form onSubmit={handleEmailSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
+              <Input id="email" type="email" placeholder="you@example.com" value={email}
+                onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Пароль</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
+              <Input id="password" type="password" value={password}
+                onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
             </div>
             <Button type="submit" className="w-full" disabled={isSigningIn}>
               {isSigningIn && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -211,14 +223,8 @@ export default function LoginPage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="otp-email">Email</Label>
-              <Input
-                id="otp-email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <Input id="otp-email" type="email" placeholder="you@example.com" value={email}
+                onChange={(e) => setEmail(e.target.value)} required />
             </div>
             {!otpSent ? (
               <Button className="w-full" onClick={handleSendOtp} disabled={otpLoading}>
@@ -230,16 +236,9 @@ export default function LoginPage() {
                 <p className="text-sm text-muted-foreground">Код надіслано на {email}</p>
                 <div className="space-y-2">
                   <Label htmlFor="otp-code">Код підтвердження</Label>
-                  <Input
-                    id="otp-code"
-                    type="text"
-                    placeholder="000000"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    maxLength={6}
-                    className="text-center text-2xl tracking-widest"
-                    required
-                  />
+                  <Input id="otp-code" type="text" placeholder="000000" value={otp}
+                    onChange={(e) => setOtp(e.target.value)} maxLength={6}
+                    className="text-center text-2xl tracking-widest" required />
                 </div>
                 <Button type="submit" className="w-full" disabled={otpLoading}>
                   {otpLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
