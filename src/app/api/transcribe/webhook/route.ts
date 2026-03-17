@@ -17,14 +17,19 @@ import { recordTranscriptionUsage } from "@/lib/usage";
  */
 export async function POST(req: NextRequest) {
   try {
-    const job = await req.json();
+    const payload = await req.json();
+    
+    // Salad sends webhook as event envelope: { type, timestamp, data: { ...job } }
+    // Or as direct job object: { id, status, output, ... }
+    const job = payload.data || payload;
     const jobId = job.id;
-    const status = job.status;
+    // Status can be in job.status or derived from event type
+    const status = job.status || (payload.type?.includes("succeeded") ? "succeeded" : payload.type?.includes("failed") ? "failed" : undefined);
 
-    console.log(`[Webhook] Job ${jobId} status: ${status}`, JSON.stringify(job).substring(0, 200));
+    console.log(`[Webhook] Job ${jobId} status: ${status}`, JSON.stringify(payload).substring(0, 300));
 
     if (!jobId) {
-      console.error("[Webhook] No job id in payload");
+      console.error("[Webhook] No job id in payload. Keys:", Object.keys(payload));
       return NextResponse.json({ error: "No job id" }, { status: 400 });
     }
 
