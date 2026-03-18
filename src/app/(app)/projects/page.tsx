@@ -146,7 +146,7 @@ export default function ProjectsPage() {
     queryFn: () =>
       apiGet(API_ROUTES.DATA("transcriptions"), {
         workspace_id: workspaceId || 0,
-        project_id: selectedProjectId,
+        project_id: selectedProjectId || 0,
       }),
     enabled: !!workspaceId && selectedProjectId !== null,
   });
@@ -246,9 +246,7 @@ export default function ProjectsPage() {
 
   const assignMutation = useMutation({
     mutationFn: (txId: number) =>
-      apiPut(API_ROUTES.DATA_RECORD("transcriptions", txId), {
-        project_id: selectedProjectId,
-      }),
+      apiPost("/api/projects/assign", { transcriptionId: txId, projectId: selectedProjectId }),
     onSuccess: () => {
       toast.success("Транскрипцію додано до проєкту");
       invalidateAll();
@@ -258,7 +256,7 @@ export default function ProjectsPage() {
 
   const unassignMutation = useMutation({
     mutationFn: (txId: number) =>
-      apiPut(API_ROUTES.DATA_RECORD("transcriptions", txId), { project_id: 0 }),
+      apiPost("/api/projects/assign", { transcriptionId: txId, projectId: null }),
     onSuccess: () => {
       toast.success("Транскрипцію видалено з проєкту");
       invalidateAll();
