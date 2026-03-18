@@ -48,6 +48,7 @@ async function generateTitle(message: string, model: string): Promise<string> {
 export async function POST(req: NextRequest) {
   try {
     await ncb.requireAuth(req);
+    const cookie = ncb.getCookie(req);
 
     const body = await req.json() as any;
     const { workspaceId, message, conversationId, model, systemPrompt } = body;
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
       if (!existing || existing.deleted_at) {
         return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
       }
-      const msgs = await ncb.read<any>("messages", {
+      const msgs = await ncb.readAsUser<any>("messages", cookie, {
         filters: { conversation_id: convId },
         sort: "created_at",
         order: "desc",
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
     } else {
       isNewConversation = true;
       const appUser = await ncb.findOne<any>("app_users", { workspace_id: workspaceId });
-      const conv = await ncb.create("conversations", {
+      const conv = await ncb.createAsUser("conversations", cookie, {
         workspace_id: workspaceId,
         owner_user_id: appUser?.id || 0,
         title: message.slice(0, 80), // temporary, will update after AI response
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Save user message
-    await ncb.create("messages", {
+    await ncb.createAsUser("messages", cookie, {
       conversation_id: convId,
       role: "user",
       content_text: message,
@@ -120,7 +121,7 @@ export async function POST(req: NextRequest) {
     const answer = await chatCompletion(messages, selectedModel);
 
     // 6. Save assistant message
-    await ncb.create("messages", {
+    await ncb.createAsUser("messages", cookie, {
       conversation_id: convId,
       role: "assistant",
       content_text: answer,
