@@ -47,10 +47,8 @@ export async function deleteTranscription(txId: number): Promise<void> {
 // ============ Workspaces ============
 
 export async function listAllWorkspaces(): Promise<PaginatedResponse<Workspace>> {
-  return apiGet<PaginatedResponse<Workspace>>(API_ROUTES.DATA("workspaces"), {
+  return apiGet<PaginatedResponse<Workspace>>("/api/admin/workspaces", {
     limit: 200,
-    sort: "created_at",
-    order: "desc",
   });
 }
 
@@ -62,5 +60,5 @@ export async function updateWorkspace(
     "max_members" | "max_transcriptions" | "default_salad_mode"
   >>
 ): Promise<void> {
-  return apiPut(API_ROUTES.DATA_RECORD("workspaces", workspaceId), data);
+  return apiPut("/api/admin/workspaces", { id: workspaceId, ...data });
 }
