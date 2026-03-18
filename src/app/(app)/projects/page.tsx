@@ -115,7 +115,7 @@ function colorDot(color: string | null) {
 // ---------------------------------------------------------------------------
 
 export default function ProjectsPage() {
-  const { workspace, workspaceId } = useWorkspace();
+  const { workspace, workspaceId! } = useWorkspace();
   const qc = useQueryClient();
 
   // ---- local state ---------------------------------------------------------
