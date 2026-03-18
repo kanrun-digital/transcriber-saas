@@ -45,6 +45,7 @@ export default function ChatPage() {
   const [mode, setMode] = useState<ChatMode>(transcriptionParam ? "rag" : "chat");
   const [selectedModel, setSelectedModel] = useState("openai/gpt-4o-mini");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [selectedTranscription, setSelectedTranscription] = useState<string>(transcriptionParam || "");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -65,6 +66,19 @@ export default function ChatPage() {
   });
 
   const conversations = conversationsQuery.data?.data || [];
+
+  // Load indexed transcriptions for RAG mode
+  const indexedTxQuery = useQuery({
+    queryKey: ["indexed-transcriptions", workspace?.id],
+    queryFn: () => apiGet<{ data: any[] }>(API_ROUTES.DATA("transcriptions"), {
+      workspace_id: workspace?.id,
+      rag_status: "synced",
+      limit: 50,
+    }),
+    enabled: !!workspace?.id && mode === "rag",
+    staleTime: 30_000,
+  });
+  const indexedTranscriptions = (indexedTxQuery.data?.data || []).filter((t: any) => !t.deleted_at);
 
   // Load available models
   const modelsQuery = useQuery({
@@ -146,7 +160,7 @@ export default function ChatPage() {
         question,
         conversationId: conversationId || undefined,
         model: selectedModel,
-        transcriptionId: transcriptionParam ? Number(transcriptionParam) : undefined,
+        transcriptionId: selectedTranscription ? Number(selectedTranscription) : undefined,
       }),
     onSuccess: (data) => {
       setMessages(prev => [
@@ -255,6 +269,22 @@ export default function ChatPage() {
                 <FileText className="w-4 h-4 mr-1" /> RAG
               </Button>
             </div>
+
+          {/* RAG Transcription selector */}
+          {mode === "rag" && indexedTranscriptions.length > 0 && (
+            <Select value={selectedTranscription} onValueChange={setSelectedTranscription}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Транскрипція..." />
+              </SelectTrigger>
+              <SelectContent>
+                {indexedTranscriptions.map((t: any) => (
+                  <SelectItem key={t.id} value={String(t.id)}>
+                    {t.original_filename || `#${t.id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
             <Select value={selectedModel} onValueChange={setSelectedModel}>
               <SelectTrigger className="w-[220px]">
