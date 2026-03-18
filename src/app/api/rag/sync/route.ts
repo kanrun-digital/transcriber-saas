@@ -1,19 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as ncb from "@/lib/ncb";
-import { createRag, uploadFileToRag } from "@/lib/straico";
 import { getDownloadUrl } from "@/lib/s3";
 
 function now(): string {
   return new Date().toISOString().slice(0, 19).replace("T", " ");
 }
 
+function straicoConfig() {
+  return {
+    apiKey: process.env["STRAICO_API_KEY"] || "",
+    apiUrl: "https://api.straico.com",
+  };
+}
+
 /**
  * POST /api/rag/sync
  * 
- * Creates a Straico RAG base for a transcription and uploads transcript text.
- * If RAG base already exists, re-uploads the text (reindex).
- * 
- * Body: { transcriptionId, workspaceId }
+ * Creates a Straico RAG base with transcript text file.
+ * If RAG base already exists, uploads new file (reindex).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -25,46 +29,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "transcriptionId and workspaceId required" }, { status: 400 });
     }
 
-    // 1. Get transcription
     const tx = await ncb.readOne<any>("transcriptions", transcriptionId);
     if (!tx || tx.deleted_at) {
       return NextResponse.json({ error: "Transcription not found" }, { status: 404 });
     }
 
     if (tx.status !== "completed") {
-      return NextResponse.json({ error: "Transcription must be completed before RAG sync" }, { status: 400 });
+      return NextResponse.json({ error: "Transcription must be completed" }, { status: 400 });
     }
 
-    // 2. Get transcript text — from NCB preview or S3 artifact
+    // Get transcript text
     let transcriptText = tx.transcript_text || "";
 
-    // If we have a text URL in S3, try to fetch full text
     if (tx.transcript_text_url && transcriptText.length < 500) {
       try {
         const textUrl = await getDownloadUrl(tx.transcript_text_url, 3600);
         const res = await fetch(textUrl);
-        if (res.ok) {
-          transcriptText = await res.text();
-        }
+        if (res.ok) transcriptText = await res.text();
       } catch (e) {
         console.warn("[RAG Sync] Could not fetch full text from S3:", e);
       }
     }
 
     if (!transcriptText || transcriptText.length < 10) {
-      return NextResponse.json({ error: "No transcript text available for RAG indexing" }, { status: 400 });
+      return NextResponse.json({ error: "No transcript text available" }, { status: 400 });
     }
 
-    // 3. Update status
     await ncb.update("transcriptions", transcriptionId, {
       rag_status: "syncing",
       updated_at: now(),
     });
 
+    const config = straicoConfig();
     let ragBaseId = tx.rag_base_id;
     let straicoRagId: string | null = null;
 
-    // 4. Check if RAG base already exists
+    // Check existing RAG base
     if (ragBaseId) {
       const existingRag = await ncb.readOne<any>("rag_bases", ragBaseId);
       if (existingRag && existingRag.straico_rag_id && !existingRag.deleted_at) {
@@ -72,18 +72,41 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5. Create RAG base if not exists
+    const textBlob = new Blob([transcriptText], { type: "text/plain" });
+    const filename = `transcript-${transcriptionId}.txt`;
+
     if (!straicoRagId) {
-      const ragName = `TX-${transcriptionId}: ${tx.original_filename || "transcription"}`;
-      const ragResult = await createRag(ragName, `Транскрипція: ${tx.original_filename || transcriptionId}`);
-      straicoRagId = ragResult.id;
+      // Create RAG with file in one step
+      const formData = new FormData();
+      formData.append("name", `TX-${transcriptionId}: ${tx.original_filename || "transcription"}`);
+      formData.append("description", `Транскрипція: ${tx.original_filename || transcriptionId}`);
+      formData.append("chunking_method", "recursive");
+      formData.append("chunk_size", "1000");
+      formData.append("chunk_overlap", "50");
+      formData.append("files", textBlob, filename);
+
+      const createRes = await fetch(`${config.apiUrl}/v0/rag`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${config.apiKey}` },
+        body: formData,
+      });
+
+      if (!createRes.ok) {
+        const errText = await createRes.text();
+        console.error("[RAG Sync] Create error:", errText);
+        await ncb.update("transcriptions", transcriptionId, { rag_status: "error", updated_at: now() });
+        return NextResponse.json({ error: `Straico RAG create error: ${errText}` }, { status: 500 });
+      }
+
+      const createData = await createRes.json();
+      straicoRagId = createData.data?._id || createData.data?.id;
 
       // Save to NCB
       const ragRecord = await ncb.create("rag_bases", {
         workspace_id: workspaceId,
         owner_user_id: tx.app_user_id,
         straico_rag_id: straicoRagId,
-        name: ragName,
+        name: `TX-${transcriptionId}: ${tx.original_filename || "transcription"}`,
         description: `Транскрипція: ${tx.original_filename}`,
         status: "active",
         created_at: now(),
@@ -91,22 +114,12 @@ export async function POST(req: NextRequest) {
       });
       ragBaseId = ragRecord.id;
 
-      await ncb.update("transcriptions", transcriptionId, {
-        rag_base_id: ragBaseId,
-      });
-    }
-
-    // 6. Upload transcript text as file to RAG
-    const textBlob = new Blob([transcriptText], { type: "text/plain" });
-    const textUrl = URL.createObjectURL(textBlob);
-
-    // Use direct upload via Straico API
-    try {
-      // Create a temporary text file and upload
+      await ncb.update("transcriptions", transcriptionId, { rag_base_id: ragBaseId });
+    } else {
+      // Reindex: upload new file to existing RAG
       const formData = new FormData();
-      formData.append("files", new Blob([transcriptText], { type: "text/plain" }), `transcript-${transcriptionId}.txt`);
+      formData.append("files", textBlob, filename);
 
-      const config = { apiKey: process.env["STRAICO_API_KEY"] || "", apiUrl: "https://api.straico.com" };
       const uploadRes = await fetch(`${config.apiUrl}/v0/rag/${straicoRagId}/file`, {
         method: "POST",
         headers: { Authorization: `Bearer ${config.apiKey}` },
@@ -115,18 +128,13 @@ export async function POST(req: NextRequest) {
 
       if (!uploadRes.ok) {
         const errText = await uploadRes.text();
-        throw new Error(`Straico RAG upload failed: ${errText}`);
+        console.error("[RAG Sync] Upload error:", errText);
+        await ncb.update("transcriptions", transcriptionId, { rag_status: "error", updated_at: now() });
+        return NextResponse.json({ error: `RAG upload failed: ${errText}` }, { status: 500 });
       }
-    } catch (uploadError: any) {
-      console.error("[RAG Sync] Upload error:", uploadError);
-      await ncb.update("transcriptions", transcriptionId, {
-        rag_status: "error",
-        updated_at: now(),
-      });
-      return NextResponse.json({ error: `RAG upload failed: ${uploadError.message}` }, { status: 500 });
     }
 
-    // 7. Update status to synced
+    // Update status
     await ncb.update("transcriptions", transcriptionId, {
       rag_status: "synced",
       rag_synced: 1,
