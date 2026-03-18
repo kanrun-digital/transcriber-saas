@@ -10,6 +10,7 @@ import {
   Settings,
   Sliders,
   Shield,
+  FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/constants/routes";
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { href: ROUTES.UPLOAD, label: "Завантажити", icon: Upload },
   { href: ROUTES.TRANSCRIPTIONS, label: "Транскрипції", icon: FileText },
   { href: ROUTES.PRESETS, label: "Пресети", icon: Sliders },
+  { href: "/projects", label: "Проекти", icon: FolderOpen },
   { href: ROUTES.CHAT, label: "Чат з AI", icon: MessageSquare },
   { href: ROUTES.SETTINGS, label: "Налаштування", icon: Settings },
 ];
