@@ -5,20 +5,14 @@ import { checkStraicoLimit, recordStraicoUsage, getWorkspaceLimits } from "@/lib
 
 /**
  * POST /api/rag/query
- * 
- * Query workspace RAG base (Straico).
- * Saves message to conversation, tracks usage.
- * Respects soft deletes on conversations & rag_bases.
- * Uses workspace default_model_id if not specified.
- * 
- * Body: { workspaceId, question, conversationId?, model?, ragBaseId? }
- * Returns: { answer, references, conversationId, coinsUsed }
  */
 export async function POST(req: NextRequest) {
   try {
     await ncb.requireAuth(req);
+    const cookie = ncb.getCookie(req);
 
-    const { workspaceId, question, conversationId, model, ragBaseId } = await req.json();
+    const body = await req.json() as any;
+    const { workspaceId, question, conversationId, model, ragBaseId, transcriptionId } = body;
 
     if (!workspaceId || !question) {
       return NextResponse.json({ error: "workspaceId and question required" }, { status: 400 });
@@ -27,36 +21,47 @@ export async function POST(req: NextRequest) {
     // 1. Check limit
     const usageCheck = await checkStraicoLimit(workspaceId);
     if (!usageCheck.allowed) {
-      return NextResponse.json({
-        error: usageCheck.reason,
-        usage: { used: usageCheck.used, limit: usageCheck.limit, remaining: usageCheck.remaining },
-      }, { status: 429 });
+      return NextResponse.json({ error: usageCheck.reason }, { status: 429 });
     }
 
-    // Get workspace defaults
     const wsLimits = await getWorkspaceLimits(workspaceId);
     const defaultModel = model || wsLimits?.default_model_id || "openai/gpt-4o-mini";
 
-    // 2. Find RAG base (exclude soft-deleted)
-    let ragId: string | null = null;
+    // 2. Find RAG base — support both ragBaseId and transcriptionId
+    let straicoRagId: string | null = null;
 
     if (ragBaseId) {
       const ragBase = await ncb.readOne<any>("rag_bases", ragBaseId);
       if (ragBase?.deleted_at) {
         return NextResponse.json({ error: "RAG base has been deleted" }, { status: 404 });
       }
-      ragId = ragBase?.straico_rag_id || null;
-    } else {
-      const rags = await ncb.search<any>("rag_bases", { workspace_id: workspaceId, status: "active" });
-      const activeRag = rags.find((r: any) => !r.deleted_at);
-      ragId = activeRag?.straico_rag_id || null;
+      straicoRagId = ragBase?.straico_rag_id || null;
     }
 
-    if (!ragId) {
-      return NextResponse.json({ error: "No active RAG base found" }, { status: 404 });
+    // If transcriptionId provided (from chat?transcription=X), find its RAG base
+    if (!straicoRagId && transcriptionId) {
+      const tx = await ncb.readOne<any>("transcriptions", transcriptionId);
+      if (tx?.rag_base_id) {
+        const ragBase = await ncb.readOne<any>("rag_bases", tx.rag_base_id);
+        straicoRagId = ragBase?.straico_rag_id || null;
+      }
     }
 
-    // 3. Get or create conversation (check soft delete)
+    // Fallback: find any active RAG base for workspace
+    if (!straicoRagId) {
+      const rags = await ncb.read<any>("rag_bases", {
+        filters: { workspace_id: workspaceId },
+        limit: 10,
+      });
+      const activeRag = (rags.data || []).find((r: any) => !r.deleted_at && r.straico_rag_id);
+      straicoRagId = activeRag?.straico_rag_id || null;
+    }
+
+    if (!straicoRagId) {
+      return NextResponse.json({ error: "No active RAG base found. Проіндексуйте транскрипцію спочатку." }, { status: 404 });
+    }
+
+    // 3. Get or create conversation (use cookie for RLS)
     let convId = conversationId;
     if (convId) {
       const existing = await ncb.readOne<any>("conversations", convId);
@@ -65,69 +70,59 @@ export async function POST(req: NextRequest) {
       }
     } else {
       const appUser = await ncb.findOne<any>("app_users", { workspace_id: workspaceId });
-
-      const conv = await ncb.create("conversations", {
+      const conv = await ncb.createAsUser("conversations", cookie, {
         workspace_id: workspaceId,
         owner_user_id: appUser?.id || 0,
-        title: question.slice(0, 100),
+        title: `RAG: ${question.slice(0, 80)}`,
       });
       convId = conv.id;
     }
 
     // 4. Save user message
-    await ncb.create("messages", {
-      conversation_id: convId,
-      role: "user",
-      content_text: question,
-    });
+    try {
+      await ncb.createAsUser("messages", cookie, {
+        conversation_id: convId,
+        role: "user",
+        content_text: question,
+      });
+    } catch (e) {
+      console.warn("[RAG/Query] Save user message failed:", e);
+    }
 
     // 5. Query Straico RAG
-    const result = await queryRag(ragId, question, defaultModel);
+    const result = await queryRag(straicoRagId, question, defaultModel);
 
     // 6. Save assistant message
-    await ncb.create("messages", {
-      conversation_id: convId,
-      role: "assistant",
-      content_text: result.answer,
-      rag_references_json: result.references?.length
-        ? JSON.stringify(result.references) : null,
-    });
+    try {
+      await ncb.createAsUser("messages", cookie, {
+        conversation_id: convId,
+        role: "assistant",
+        content_text: result.answer,
+        rag_references_json: result.references?.length
+          ? JSON.stringify(result.references) : null,
+      });
+    } catch (e) {
+      console.warn("[RAG/Query] Save assistant message failed:", e);
+    }
 
-    // 7. Log Straico request
-    const ts = new Date().toISOString().slice(0, 19).replace("T", " ");
-    const straicoReq = await ncb.create("straico_requests", {
-      workspace_id: workspaceId,
-      conversation_id: convId,
-      request_type: "rag_prompt",
-      endpoint: `/v0/rag/${ragId}/prompt`,
-      model_id: defaultModel,
-      status: "completed",
-      started_at: ts,
-      finished_at: ts,
-    });
-
-    // 8. Record coins
-    const estimatedCoins = 5;
-    const appUser = await ncb.findOne<any>("app_users", { workspace_id: workspaceId });
-    await recordStraicoUsage(workspaceId, appUser?.id || null, estimatedCoins, "rag_query", convId);
-
-    await ncb.create("straico_usage", {
-      request_id: straicoReq.id,
-      workspace_id: workspaceId,
-      app_user_id: appUser?.id || null,
-      model_id: defaultModel,
-      total_coins: estimatedCoins,
-    });
+    // 7. Record usage (non-blocking)
+    try {
+      const estimatedCoins = 5;
+      const appUser = await ncb.findOne<any>("app_users", { workspace_id: workspaceId });
+      await recordStraicoUsage(workspaceId, appUser?.id || null, estimatedCoins, "rag_query", convId);
+    } catch (e) {
+      console.warn("[RAG/Query] Usage recording failed:", e);
+    }
 
     return NextResponse.json({
       answer: result.answer,
       references: result.references,
       conversationId: convId,
-      coinsUsed: estimatedCoins,
+      coinsUsed: 5,
     });
   } catch (error: any) {
     if (error instanceof Response) return new NextResponse(error.body, { status: error.status });
     console.error("[RAG/Query] Error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }
