@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
@@ -9,6 +9,7 @@ import { AppHeader } from "@/components/layout/app-header";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { sessionUser, isLoading } = useAuth();
 
   useEffect(() => {
@@ -30,12 +31,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (!sessionUser) return null;
 
+  // Chat page needs full width without padding
+  const isFullWidth = pathname === "/chat";
+
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
         <AppHeader />
-        <main className="flex-1 p-4 md:p-6 lg:p-8">
+        <main className={isFullWidth ? "flex-1 overflow-hidden" : "flex-1 p-4 md:p-6 lg:p-8"}>
           {children}
         </main>
       </SidebarInset>
