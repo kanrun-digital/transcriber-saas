@@ -72,13 +72,13 @@ export default function ChatPage() {
     queryKey: ["indexed-transcriptions", workspace?.id],
     queryFn: () => apiGet<{ data: any[] }>(API_ROUTES.DATA("transcriptions"), {
       workspace_id: workspace?.id,
-      rag_status: "synced",
+      status: "completed",
       limit: 50,
     }),
-    enabled: !!workspace?.id && mode === "rag",
+    enabled: !!workspace?.id,
     staleTime: 30_000,
   });
-  const indexedTranscriptions = (indexedTxQuery.data?.data || []).filter((t: any) => !t.deleted_at);
+  const indexedTranscriptions = (indexedTxQuery.data?.data || []).filter((t: any) => !t.deleted_at && t.rag_status === "synced");
 
   // Load available models
   const modelsQuery = useQuery({
@@ -260,7 +260,7 @@ export default function ChatPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="flex gap-1">
               <Button variant={mode === "chat" ? "default" : "outline"} size="sm" onClick={() => setMode("chat")}>
                 <Brain className="w-4 h-4 mr-1" /> Чат
@@ -345,7 +345,7 @@ export default function ChatPage() {
         </div>
 
         {/* Input */}
-        <ChatInput onSend={handleSend} isLoading={isLoading} disabled={!workspace} />
+        <div className="w-full"><ChatInput onSend={handleSend} isLoading={isLoading} disabled={!workspace} /></div>
       </div>
     </div>
   );
