@@ -136,7 +136,7 @@ export default function ProjectsPage() {
   // Transcription counts per project (fetch ALL workspace transcriptions once)
   const allTranscriptionsQuery = useQuery<Transcription[]>({
     queryKey: ["transcriptions", workspaceId],
-    queryFn: () => apiGet(API_ROUTES.DATA("transcriptions"), { workspace_id: workspaceId }),
+    queryFn: () => apiGet(API_ROUTES.DATA("transcriptions"), { workspace_id: workspaceId! }),
     enabled: !!workspaceId,
   });
 
@@ -145,7 +145,7 @@ export default function ProjectsPage() {
     queryKey: ["transcriptions", workspaceId, selectedProjectId],
     queryFn: () =>
       apiGet(API_ROUTES.DATA("transcriptions"), {
-        workspace_id: workspaceId,
+        workspace_id: workspaceId!,
         project_id: selectedProjectId,
       }),
     enabled: !!workspaceId && selectedProjectId !== null,
@@ -154,7 +154,7 @@ export default function ProjectsPage() {
   // RAG bases for workspace
   const ragQuery = useQuery<RagBase[]>({
     queryKey: ["rag-bases", workspaceId],
-    queryFn: () => apiGet(API_ROUTES.DATA("rag_bases"), { workspace_id: workspaceId }),
+    queryFn: () => apiGet(API_ROUTES.DATA("rag_bases"), { workspace_id: workspaceId! }),
     enabled: !!workspaceId,
   });
 
@@ -208,7 +208,7 @@ export default function ProjectsPage() {
   const createMutation = useMutation({
     mutationFn: (data: { name: string; description: string; color: string }) =>
       apiPost(API_ROUTES.DATA("projects"), {
-        workspace_id: workspaceId,
+        workspace_id: workspaceId!,
         owner_user_id: workspace?.owner_user_id,
         name: data.name,
         description: data.description || null,
@@ -258,7 +258,7 @@ export default function ProjectsPage() {
 
   const unassignMutation = useMutation({
     mutationFn: (txId: number) =>
-      apiPut(API_ROUTES.DATA_RECORD("transcriptions", txId), { project_id: null }),
+      apiPut(API_ROUTES.DATA_RECORD("transcriptions", txId), { project_id: undefined }),
     onSuccess: () => {
       toast.success("Транскрипцію видалено з проєкту");
       invalidateAll();
@@ -268,7 +268,7 @@ export default function ProjectsPage() {
 
   const ragSyncMutation = useMutation({
     mutationFn: (projectId: number) =>
-      apiPost("/api/rag/sync-project", { projectId, workspaceId }),
+      apiPost("/api/rag/sync-project", { projectId, workspaceId! }),
     onSuccess: () => {
       toast.success("RAG базу створено / синхронізовано");
       qc.invalidateQueries({ queryKey: ["rag-bases", workspaceId] });
