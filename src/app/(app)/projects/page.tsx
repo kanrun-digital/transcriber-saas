@@ -146,7 +146,7 @@ export default function ProjectsPage() {
     queryFn: () =>
       apiGet(API_ROUTES.DATA("transcriptions"), {
         workspace_id: workspaceId || 0,
-        project_id: selectedProjectId,
+        project_id: selectedProjectId || 0,
       }),
     enabled: !!workspaceId && selectedProjectId !== null,
   });
