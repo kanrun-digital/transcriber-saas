@@ -176,12 +176,12 @@ export default function ProjectsPage() {
   }, [allTranscriptions]);
 
   const ragProjectIds = useMemo(
-    () => new Set(ragBases.map((r) => r.project_id)),
+    () => new Set(ragBases.map((r: any) => r.project_id)),
     [ragBases],
   );
 
   const unassignedTranscriptions = useMemo(
-    () => allTranscriptions.filter((t) => t.project_id == null),
+    () => allTranscriptions.filter((t: any) => t.project_id == null),
     [allTranscriptions],
   );
 
@@ -189,13 +189,13 @@ export default function ProjectsPage() {
     if (!searchQuery.trim()) return projects;
     const q = searchQuery.toLowerCase();
     return projects.filter(
-      (p) =>
+      (p: any) =>
         p.name.toLowerCase().includes(q) ||
         (p.description ?? "").toLowerCase().includes(q),
     );
   }, [projects, searchQuery]);
 
-  const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
+  const selectedProject = projects.find((p: any) => p.id === selectedProjectId) ?? null;
 
   // ---- mutations -----------------------------------------------------------
 
@@ -482,7 +482,7 @@ export default function ProjectsPage() {
                         <SelectValue placeholder="Оберіть транскрипцію…" />
                       </SelectTrigger>
                       <SelectContent>
-                        {unassignedTranscriptions.map((t) => (
+                        {unassignedTranscriptions.map((t: any) => (
                           <SelectItem key={t.id} value={String(t.id)}>
                             {t.title || `#${t.id}`}
                           </SelectItem>
@@ -708,7 +708,7 @@ function ProjectFormDialog({
             <div className="space-y-2">
               <Label>Колір</Label>
               <div className="flex flex-wrap gap-2">
-                {PROJECT_COLORS.map((c) => (
+                {PROJECT_COLORS.map((c: any) => (
                   <button
                     key={c.value}
                     type="button"
