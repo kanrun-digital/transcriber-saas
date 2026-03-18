@@ -13,12 +13,11 @@ export const ROUTES = {
   ADMIN: "/admin",
 } as const;
 
-
 export const API_ROUTES = {
-  // Auth
-  AUTH_SESSION: "/api/auth/session",
-  AUTH_SIGN_IN: "/api/auth/sign-in",
-  AUTH_SIGN_UP: "/api/auth/sign-up",
+  // Auth — matches NCB endpoints directly (no mapping)
+  AUTH_SESSION: "/api/auth/get-session",
+  AUTH_SIGN_IN: "/api/auth/sign-in/email",
+  AUTH_SIGN_UP: "/api/auth/sign-up/email",
   AUTH_SIGN_OUT: "/api/auth/sign-out",
   // Upload
   UPLOAD_PRESIGN: "/api/upload/presign",
