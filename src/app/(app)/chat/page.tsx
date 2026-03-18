@@ -181,7 +181,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
       {/* Sidebar */}
       {sidebarOpen && (
         <div className="w-64 border-r flex flex-col bg-muted/30">
@@ -226,7 +226,7 @@ export default function ChatPage() {
       )}
 
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-3">
