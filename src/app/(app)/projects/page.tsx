@@ -346,7 +346,7 @@ export default function ProjectsPage() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filteredProjects.map((project) => {
+              {filteredProjects.map((project: any) => {
                 const count = transcriptionCountMap.get(project.id) ?? 0;
                 const hasRag = ragProjectIds.has(project.id);
                 const isSelected = selectedProjectId === project.id;
@@ -510,7 +510,7 @@ export default function ProjectsPage() {
                     </p>
                   ) : (
                     <ul className="space-y-2 max-h-[400px] overflow-y-auto">
-                      {projectTranscriptions.map((tx) => (
+                      {projectTranscriptions.map((tx: any) => (
                         <li
                           key={tx.id}
                           className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
