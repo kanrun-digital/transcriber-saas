@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
       salad_mode: "full",
       language: detectedLang,
       detected_language: detectedLang,
-      transcript_text: fullText.substring(0, 500),
+      transcript_text: fullText,
       word_count: wordCount,
       duration_seconds: durationSec,
       created_at: now(),
