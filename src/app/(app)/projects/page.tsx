@@ -209,7 +209,7 @@ export default function ProjectsPage() {
     mutationFn: (data: { name: string; description: string; color: string }) =>
       apiPost(API_ROUTES.DATA("projects"), {
         workspace_id: workspaceId || 0,
-        owner_user_id: workspace?.owner_user_id,
+        owner_user_id: 0,
         name: data.name,
         description: data.description || null,
         color: data.color,
