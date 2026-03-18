@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
     // Save as completed transcription
     const txRecord = await ncb.create("transcriptions", {
       workspace_id: workspaceId,
+      app_user_id: 0,
       original_filename: videoTitle,
       storage_url: url,
       source_type: "youtube",
