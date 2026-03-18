@@ -84,13 +84,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ appUser, workspace });
     }
 
-    // 1. Create workspace (user_id is a relation field — set via NCB panel, not create)
+    // 1. Create workspace with Free plan defaults
     const wsResult = await ncbCreate("workspaces", {
       name: `${name || email.split("@")[0]}'s Workspace`,
       slug: email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "-"),
       plan: "free",
       status: "active",
       active_member_count: 1,
+      salad_minutes_limit: 60,
+      straico_coins_limit: 1000,
+      max_transcriptions: 5,
+      max_file_size_mb: 100,
+      max_storage_gb: 1,
+      max_rag_bases: 1,
+      max_agents: 0,
+      max_members: 1,
     });
 
     // 2. Create app_user
