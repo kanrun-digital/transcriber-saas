@@ -16,11 +16,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload as UploadIcon, Link2, CheckCircle2, Loader2 } from "lucide-react";
+import { Upload as UploadIcon, Link2, CheckCircle2, Loader2, Youtube } from "lucide-react";
 import { toast } from "sonner";
 import type { Preset } from "@/types";
 
-type UploadMode = "file" | "url";
+type UploadMode = "file" | "url" | "youtube";
 
 // ============ URL helpers ============
 
@@ -66,6 +66,10 @@ export default function UploadPage() {
   const { workspace } = useWorkspace();
   const [activeTab, setActiveTab] = useState<UploadMode>("file");
   const [urlInput, setUrlInput] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [youtubeResult, setYoutubeResult] = useState<any>(null);
+  const [youtubeError, setYoutubeError] = useState<string | null>(null);
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
   const [urlResult, setUrlResult] = useState<{ directUrl: string; source: string } | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [isUrlLoading, setIsUrlLoading] = useState(false);
@@ -179,6 +183,36 @@ export default function UploadPage() {
     setUrlResult(null);
     setUrlError(null);
     setActivePresetName(null);
+    setYoutubeUrl("");
+    setYoutubeResult(null);
+    setYoutubeError(null);
+  };
+
+  // YouTube check
+  const handleYoutubeCheck = async () => {
+    if (!youtubeUrl.trim() || !workspace) return;
+    setYoutubeLoading(true);
+    setYoutubeError(null);
+    setYoutubeResult(null);
+    try {
+      const res = await fetch("/api/youtube/transcript", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ url: youtubeUrl.trim(), workspaceId: workspace.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Помилка");
+      setYoutubeResult(data);
+      if (data.hasCaptions && data.transcriptionId) {
+        toast.success(`Субтитри отримано! ${data.wordCount} слів`);
+        router.push(`/transcriptions/${data.transcriptionId}`);
+      }
+    } catch (err: any) {
+      setYoutubeError(err.message);
+    } finally {
+      setYoutubeLoading(false);
+    }
   };
 
   return (
@@ -195,9 +229,10 @@ export default function UploadPage() {
           <CardHeader><CardTitle>Крок 1: Джерело файлу</CardTitle></CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as UploadMode)}>
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="file"><UploadIcon className="w-4 h-4 mr-2" />Файл з комп'ютера</TabsTrigger>
                 <TabsTrigger value="url"><Link2 className="w-4 h-4 mr-2" />Посилання (URL)</TabsTrigger>
+                <TabsTrigger value="youtube"><Youtube className="w-4 h-4 mr-2" />YouTube</TabsTrigger>
               </TabsList>
 
               <TabsContent value="file" className="space-y-4 mt-4">
@@ -230,6 +265,47 @@ export default function UploadPage() {
                       <CheckCircle2 className="h-4 w-4" />
                       <AlertDescription>
                         <strong>{(urlResult as any)?.source}</strong> — посилання готове до обробки
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="youtube" className="space-y-4 mt-4">
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>YouTube URL</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={youtubeUrl}
+                        onChange={(e) => { setYoutubeUrl(e.target.value); setYoutubeError(null); setYoutubeResult(null); }}
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        onKeyDown={(e) => e.key === "Enter" && handleYoutubeCheck()}
+                      />
+                      <Button variant="secondary" onClick={handleYoutubeCheck} disabled={youtubeLoading}>
+                        {youtubeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Отримати"}
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Система спробує витягти субтитри безкоштовно. Якщо субтитрів немає — можна транскрибувати через AI.
+                  </p>
+                  {youtubeError && (
+                    <Alert variant="destructive"><AlertDescription>{youtubeError}</AlertDescription></Alert>
+                  )}
+                  {youtubeResult && youtubeResult.hasCaptions && (
+                    <Alert>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <AlertDescription>
+                        <strong>{youtubeResult.videoTitle}</strong> — {youtubeResult.wordCount} слів, {youtubeResult.language}
+                        <br /><span className="text-xs">{youtubeResult.textPreview}...</span>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {youtubeResult && !youtubeResult.hasCaptions && (
+                    <Alert>
+                      <AlertDescription>
+                        Субтитри не знайдено. Використайте вкладку "Посилання (URL)" щоб транскрибувати через AI.
                       </AlertDescription>
                     </Alert>
                   )}
