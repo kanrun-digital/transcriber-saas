@@ -129,7 +129,7 @@ export default function ProjectsPage() {
 
   const projectsQuery = useQuery<Project[]>({
     queryKey: ["projects", workspaceId],
-    queryFn: () => apiGet(API_ROUTES.DATA("projects"), { workspace_id: workspaceId }),
+    queryFn: () => apiGet(API_ROUTES.DATA("projects"), { workspace_id: workspaceId! }),
     enabled: !!workspaceId,
   });
 
