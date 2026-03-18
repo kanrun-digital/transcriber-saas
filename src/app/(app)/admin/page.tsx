@@ -255,7 +255,7 @@ function EditWorkspaceDialog({
               max_rag_bases: maxRagBases,
               max_agents: maxAgents,
               max_members: maxMembers,
-              default_salad_mode: defaultSaladMode,
+              default_salad_mode: defaultSaladMode as any,
             })}
             disabled={isSaving}
           >
