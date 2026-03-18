@@ -94,7 +94,7 @@ export default function ChatPage() {
       const msgs: LocalMessage[] = (res.data || []).map((m: any) => ({
         id: `msg-${m.id}`,
         role: m.role as "user" | "assistant",
-        content: m.content,
+        content: m.content_text || m.content || "",
       }));
       setMessages(msgs);
     } catch (err) {
