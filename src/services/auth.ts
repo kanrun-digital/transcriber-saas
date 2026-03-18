@@ -22,7 +22,6 @@ export async function signIn(payload: SignInPayload): Promise<Session> {
 }
 
 export async function signOut(): Promise<void> {
-  // NCB requires non-empty body for sign-out
   return apiPost(API_ROUTES.AUTH_SIGN_OUT, {});
 }
 
