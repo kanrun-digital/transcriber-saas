@@ -7,10 +7,12 @@ export const ROUTES = {
   TRANSCRIPTIONS: "/transcriptions",
   TRANSCRIPTION_DETAIL: (id: number | string) => `/transcriptions/${id}`,
   PRESETS: "/presets",
+  PROJECTS: "/projects",
   CHAT: "/chat",
   SETTINGS: "/settings",
   ADMIN: "/admin",
 } as const;
+
 
 export const API_ROUTES = {
   // Auth
