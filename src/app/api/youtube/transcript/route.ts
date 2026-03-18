@@ -37,7 +37,7 @@ async function fetchYouTubeCaptions(videoId: string, lang?: string): Promise<{
     const html = await pageRes.text();
 
     // Extract captions JSON from page
-    const captionMatch = html.match(/"captions":\s*(\{.*?"playerCaptionsTracklistRenderer".*?\})\s*,\s*"videoDetails"/s);
+    const captionMatch = html.match(/"captions":\s*(\{.*?"playerCaptionsTracklistRenderer".*?\})\s*,\s*"videoDetails"/);
     if (!captionMatch) return null;
 
     let captionsData: any;
@@ -67,7 +67,7 @@ async function fetchYouTubeCaptions(videoId: string, lang?: string): Promise<{
       
       // Parse XML captions
       const segments: Array<{ start: number; dur: number; text: string }> = [];
-      const regex = /<text start="([\d.]+)" dur="([\d.]+)"[^>]*>(.*?)<\/text>/gs;
+      const regex = /<text start="([\d.]+)" dur="([\d.]+)"[^>]*>(.*?)<\/text>/g;
       let match;
       while ((match = regex.exec(xml)) !== null) {
         segments.push({
