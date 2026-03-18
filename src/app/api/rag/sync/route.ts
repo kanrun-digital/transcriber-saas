@@ -75,86 +75,88 @@ export async function POST(req: NextRequest) {
     const textBlob = new Blob([transcriptText], { type: "text/plain" });
     const filename = `transcript-${transcriptionId}.txt`;
 
-    if (!straicoRagId) {
-      // Create RAG with file in one step
-      const formData = new FormData();
-      formData.append("name", `TX-${transcriptionId}: ${tx.original_filename || "transcription"}`);
-      formData.append("description", `Транскрипція: ${tx.original_filename || transcriptionId}`);
-      formData.append("chunking_method", "recursive");
-      formData.append("chunk_size", "1000");
-      formData.append("chunk_overlap", "50");
-      formData.append("files", textBlob, filename);
+    // Return immediately — process in background
+    const bgPromise = (async () => {
+      try {
+        if (!straicoRagId) {
+          const formData = new FormData();
+          formData.append("name", `TX-${transcriptionId}: ${tx.original_filename || "transcription"}`);
+          formData.append("description", `Транскрипція: ${tx.original_filename || transcriptionId}`);
+          formData.append("chunking_method", "recursive");
+          formData.append("chunk_size", "1000");
+          formData.append("chunk_overlap", "50");
+          formData.append("files", textBlob, filename);
 
-      const createRes = await fetch(`${config.apiUrl}/v0/rag`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${config.apiKey}` },
-        body: formData,
-      });
+          const createRes = await fetch(`${config.apiUrl}/v0/rag`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${config.apiKey}` },
+            body: formData,
+          });
 
-      if (!createRes.ok) {
-        const errText = await createRes.text();
-        console.error("[RAG Sync] Create error:", errText);
-        await ncb.update("transcriptions", transcriptionId, { rag_status: "error", updated_at: now() });
-        return NextResponse.json({ error: `Straico RAG create error: ${errText}` }, { status: 500 });
+          if (!createRes.ok) {
+            const errText = await createRes.text();
+            throw new Error(`Straico RAG create error: ${errText}`);
+          }
+
+          const createData = await createRes.json();
+          straicoRagId = createData.data?._id || createData.data?.id;
+
+          const ragRecord = await ncb.create("rag_bases", {
+            workspace_id: workspaceId,
+            owner_user_id: tx.app_user_id,
+            straico_rag_id: straicoRagId,
+            name: `TX-${transcriptionId}: ${tx.original_filename || "transcription"}`,
+            description: `Транскрипція: ${tx.original_filename}`,
+            status: "active",
+            created_at: now(),
+            updated_at: now(),
+          });
+          ragBaseId = ragRecord.id;
+          await ncb.update("transcriptions", transcriptionId, { rag_base_id: ragBaseId });
+        } else {
+          const formData = new FormData();
+          formData.append("files", textBlob, filename);
+
+          const uploadRes = await fetch(`${config.apiUrl}/v0/rag/${straicoRagId}/file`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${config.apiKey}` },
+            body: formData,
+          });
+
+          if (!uploadRes.ok) throw new Error(`RAG upload failed: ${await uploadRes.text()}`);
+        }
+
+        await ncb.update("transcriptions", transcriptionId, {
+          rag_status: "synced",
+          rag_synced: 1,
+          rag_synced_at: now(),
+          updated_at: now(),
+        });
+
+        if (ragBaseId) {
+          await ncb.update("rag_bases", ragBaseId, {
+            status: "active",
+            last_synced_at: now(),
+            updated_at: now(),
+          });
+        }
+      } catch (err: any) {
+        console.error("[RAG Sync BG] Error:", err);
+        await ncb.update("transcriptions", transcriptionId, {
+          rag_status: "error",
+          updated_at: now(),
+        });
       }
+    })();
 
-      const createData = await createRes.json();
-      straicoRagId = createData.data?._id || createData.data?.id;
-
-      // Save to NCB
-      const ragRecord = await ncb.create("rag_bases", {
-        workspace_id: workspaceId,
-        owner_user_id: tx.app_user_id,
-        straico_rag_id: straicoRagId,
-        name: `TX-${transcriptionId}: ${tx.original_filename || "transcription"}`,
-        description: `Транскрипція: ${tx.original_filename}`,
-        status: "active",
-        created_at: now(),
-        updated_at: now(),
-      });
-      ragBaseId = ragRecord.id;
-
-      await ncb.update("transcriptions", transcriptionId, { rag_base_id: ragBaseId });
-    } else {
-      // Reindex: upload new file to existing RAG
-      const formData = new FormData();
-      formData.append("files", textBlob, filename);
-
-      const uploadRes = await fetch(`${config.apiUrl}/v0/rag/${straicoRagId}/file`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${config.apiKey}` },
-        body: formData,
-      });
-
-      if (!uploadRes.ok) {
-        const errText = await uploadRes.text();
-        console.error("[RAG Sync] Upload error:", errText);
-        await ncb.update("transcriptions", transcriptionId, { rag_status: "error", updated_at: now() });
-        return NextResponse.json({ error: `RAG upload failed: ${errText}` }, { status: 500 });
-      }
-    }
-
-    // Update status
-    await ncb.update("transcriptions", transcriptionId, {
-      rag_status: "synced",
-      rag_synced: 1,
-      rag_synced_at: now(),
-      updated_at: now(),
-    });
-
-    if (ragBaseId) {
-      await ncb.update("rag_bases", ragBaseId, {
-        status: "active",
-        last_synced_at: now(),
-        updated_at: now(),
-      });
-    }
+    // Don't await — let it run in background
+    // Edge runtime would need waitUntil, but Node runtime is fine
+    bgPromise.catch(() => {});
 
     return NextResponse.json({
       ok: true,
-      ragBaseId,
-      straicoRagId,
-      textLength: transcriptText.length,
+      status: "syncing",
+      message: "RAG індексація запущена. Статус оновиться автоматично.",
     });
   } catch (error: any) {
     if (error instanceof Response) return new NextResponse(error.body, { status: error.status });
