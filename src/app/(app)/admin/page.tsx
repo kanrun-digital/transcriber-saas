@@ -159,7 +159,20 @@ function EditWorkspaceDialog({
           {/* Plan */}
           <div className="space-y-2">
             <Label>План</Label>
-            <Select value={plan} onValueChange={setPlan}>
+            <Select value={plan} onValueChange={(v) => {
+              setPlan(v);
+              // Auto-set limits based on plan
+              if (v === "free") {
+                setSaladMinutesLimit(60); setStraicoCoinsLimit(1000); setMaxTranscriptions(5);
+                setMaxFileSizeMb(100); setMaxStorageGb(1); setMaxRagBases(1); setMaxAgents(0); setMaxMembers(1);
+              } else if (v === "pro") {
+                setSaladMinutesLimit(500); setStraicoCoinsLimit(10000); setMaxTranscriptions(1000);
+                setMaxFileSizeMb(3000); setMaxStorageGb(50); setMaxRagBases(10); setMaxAgents(3); setMaxMembers(5);
+              } else if (v === "enterprise") {
+                setSaladMinutesLimit(15000); setStraicoCoinsLimit(100000); setMaxTranscriptions(99999);
+                setMaxFileSizeMb(5000); setMaxStorageGb(500); setMaxRagBases(100); setMaxAgents(50); setMaxMembers(100);
+              }
+            }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="free">Free</SelectItem>
@@ -255,7 +268,7 @@ function EditWorkspaceDialog({
               max_rag_bases: maxRagBases,
               max_agents: maxAgents,
               max_members: maxMembers,
-              default_salad_mode: defaultSaladMode as any,
+              default_salad_mode: defaultSaladMode,
             })}
             disabled={isSaving}
           >
@@ -381,7 +394,25 @@ function AdminContent() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Адміністрування</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Адміністрування</h1>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={async () => {
+            try {
+              const res = await fetch("/api/admin/seed-presets-v3", { method: "POST", credentials: "include" });
+              const data = await res.json();
+              toast.success(`Пресети: ${data.updated || 0} оновлено, ${data.created || 0} створено`);
+            } catch { toast.error("Помилка seed"); }
+          }}>Seed Presets v3</Button>
+          <Button variant="outline" size="sm" onClick={async () => {
+            try {
+              const res = await fetch("/api/admin/cleanup-presets", { method: "POST", credentials: "include" });
+              const data = await res.json();
+              toast.success(`Видалено дублів: ${data.duplicatesRemoved || 0}`);
+            } catch { toast.error("Помилка cleanup"); }
+          }}>Cleanup дублів</Button>
+        </div>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
