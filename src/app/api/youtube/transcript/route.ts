@@ -103,6 +103,7 @@ export async function POST(req: NextRequest) {
       workspace_id: workspaceId,
       original_filename: videoTitle,
       storage_url: url,
+      source_type: "youtube",
       status: "completed",
       salad_mode: "full",
       language: detectedLang,
