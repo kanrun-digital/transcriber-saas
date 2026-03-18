@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as ncb from "@/lib/ncb";
+// @ts-ignore — youtube-transcript doesn't have types
+import { YoutubeTranscript } from "youtube-transcript";
 
 function now(): string {
   return new Date().toISOString().slice(0, 19).replace("T", " ");
@@ -21,100 +23,13 @@ function extractVideoId(url: string): string | null {
 }
 
 /**
- * Fetch YouTube captions (auto-generated or manual)
- * Uses the internal YouTube timedtext API — no API key needed
- */
-async function fetchYouTubeCaptions(videoId: string, lang?: string): Promise<{
-  text: string;
-  segments: Array<{ start: number; dur: number; text: string }>;
-  language: string;
-} | null> {
-  try {
-    // First get the video page to find caption tracks
-    const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: { "Accept-Language": lang || "en" },
-    });
-    const html = await pageRes.text();
-
-    // Extract captions JSON from page
-    const captionMatch = html.match(/"captions":\s*(\{.*?"playerCaptionsTracklistRenderer".*?\})\s*,\s*"videoDetails"/);
-    if (!captionMatch) return null;
-
-    let captionsData: any;
-    try {
-      captionsData = JSON.parse(captionMatch[1]);
-    } catch {
-      return null;
-    }
-
-    const tracks = captionsData?.playerCaptionsTracklistRenderer?.captionTracks;
-    if (!tracks || tracks.length === 0) return null;
-
-    // Find preferred language track
-    let track = tracks.find((t: any) => t.languageCode === (lang || "uk")) 
-      || tracks.find((t: any) => t.languageCode === "en")
-      || tracks[0];
-
-    if (!track?.baseUrl) return null;
-
-    // Fetch the actual captions XML
-    const captionRes = await fetch(track.baseUrl + "&fmt=json3");
-    if (!captionRes.ok) {
-      // Try XML format
-      const xmlRes = await fetch(track.baseUrl);
-      if (!xmlRes.ok) return null;
-      const xml = await xmlRes.text();
-      
-      // Parse XML captions
-      const segments: Array<{ start: number; dur: number; text: string }> = [];
-      const regex = /<text start="([\d.]+)" dur="([\d.]+)"[^>]*>(.*?)<\/text>/g;
-      let match;
-      while ((match = regex.exec(xml)) !== null) {
-        segments.push({
-          start: parseFloat(match[1]),
-          dur: parseFloat(match[2]),
-          text: match[3].replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/<[^>]+>/g, ""),
-        });
-      }
-
-      const fullText = segments.map((s: any) => s.text).join(" ");
-      return { text: fullText, segments, language: track.languageCode };
-    }
-
-    const json = await captionRes.json();
-    const events = json.events || [];
-    const segments: Array<{ start: number; dur: number; text: string }> = [];
-
-    for (const event of events) {
-      if (event.segs) {
-        const text = event.segs.map((s: any) => s.utf8).join("").trim();
-        if (text) {
-          segments.push({
-            start: (event.tStartMs || 0) / 1000,
-            dur: (event.dDurationMs || 0) / 1000,
-            text,
-          });
-        }
-      }
-    }
-
-    const fullText = segments.map((s: any) => s.text).join(" ");
-    return { text: fullText, segments, language: track.languageCode };
-  } catch (e) {
-    console.error("[YouTube Captions] Error:", e);
-    return null;
-  }
-}
-
-/**
  * POST /api/youtube/transcript
  * 
  * Body: { url, workspaceId, language? }
  * 
- * 1. Extract video ID from URL
- * 2. Try to get YouTube captions (free, instant)
- * 3. If captions available — save as transcription
- * 4. If not — return info that Salad transcription needed
+ * 1. Extract video ID
+ * 2. Fetch YouTube captions via youtube-transcript package
+ * 3. Save as completed transcription
  */
 export async function POST(req: NextRequest) {
   try {
@@ -131,19 +46,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Невірний YouTube URL" }, { status: 400 });
     }
 
-    // Try to get captions
-    const captions = await fetchYouTubeCaptions(videoId, language);
+    // Fetch transcript using youtube-transcript package
+    let segments: Array<{ text: string; offset: number; duration: number }> = [];
+    let detectedLang = language || "auto";
 
-    if (!captions || !captions.text || captions.text.length < 10) {
+    try {
+      const config: any = {};
+      if (language) config.lang = language;
+      segments = await YoutubeTranscript.fetchTranscript(videoId, config);
+    } catch (e: any) {
       return NextResponse.json({
         ok: false,
         hasCaptions: false,
         videoId,
-        message: "Субтитри не знайдено. Можна транскрибувати через AI (витрачає хвилини).",
+        message: e.message || "Субтитри не знайдено. Можна транскрибувати через AI.",
       });
     }
 
-    // Get video title from oEmbed
+    if (!segments || segments.length === 0) {
+      return NextResponse.json({
+        ok: false,
+        hasCaptions: false,
+        videoId,
+        message: "Субтитри не знайдено. Можна транскрибувати через AI.",
+      });
+    }
+
+    // Build full text
+    const fullText = segments.map((s: any) => s.text).join(" ").replace(/\s+/g, " ").trim();
+
+    if (fullText.length < 10) {
+      return NextResponse.json({
+        ok: false,
+        hasCaptions: false,
+        videoId,
+        message: "Субтитри порожні.",
+      });
+    }
+
+    // Get video title via oEmbed
     let videoTitle = `YouTube: ${videoId}`;
     try {
       const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
@@ -153,12 +94,11 @@ export async function POST(req: NextRequest) {
       }
     } catch {}
 
-    // Save as transcription
-    const wordCount = captions.text.split(/\s+/).filter(Boolean).length;
-    const durationSec = captions.segments.length > 0 
-      ? captions.segments[captions.segments.length - 1].start + captions.segments[captions.segments.length - 1].dur
-      : 0;
+    const wordCount = fullText.split(/\s+/).filter(Boolean).length;
+    const lastSeg = segments[segments.length - 1];
+    const durationSec = lastSeg ? Math.round((lastSeg.offset + lastSeg.duration) / 1000) : 0;
 
+    // Save as completed transcription
     const txRecord = await ncb.create("transcriptions", {
       workspace_id: workspaceId,
       original_filename: videoTitle,
@@ -166,11 +106,11 @@ export async function POST(req: NextRequest) {
       source_type: "youtube",
       status: "completed",
       salad_mode: "full",
-      language: captions.language,
-      detected_language: captions.language,
-      transcript_text: captions.text.substring(0, 500),
+      language: detectedLang,
+      detected_language: detectedLang,
+      transcript_text: fullText.substring(0, 500),
       word_count: wordCount,
-      duration_seconds: Math.round(durationSec),
+      duration_seconds: durationSec,
       created_at: now(),
       updated_at: now(),
     });
@@ -181,10 +121,10 @@ export async function POST(req: NextRequest) {
       videoId,
       videoTitle,
       transcriptionId: txRecord.id,
-      language: captions.language,
+      language: detectedLang,
       wordCount,
-      durationSeconds: Math.round(durationSec),
-      textPreview: captions.text.substring(0, 200),
+      durationSeconds: durationSec,
+      textPreview: fullText.substring(0, 200),
     });
   } catch (error: any) {
     if (error instanceof Response) return new NextResponse(error.body, { status: error.status });
