@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -132,19 +132,21 @@ function EditWorkspaceDialog({
   const [defaultSaladMode, setDefaultSaladMode] = useState<string>(workspace?.default_salad_mode || "full");
 
   // Reset when workspace changes
-  if (workspace && plan !== workspace.plan && !isSaving) {
-    setPlan(workspace.plan || "free");
-    setStatus(workspace.status || "active");
-    setSaladMinutesLimit(workspace.salad_minutes_limit ?? 0);
-    setStraicoCoinsLimit(workspace.straico_coins_limit ?? 0);
-    setMaxTranscriptions(workspace.max_transcriptions ?? 0);
-    setMaxFileSizeMb(workspace.max_file_size_mb ?? 0);
-    setMaxStorageGb(workspace.max_storage_gb ?? 0);
-    setMaxRagBases(workspace.max_rag_bases ?? 0);
-    setMaxAgents(workspace.max_agents ?? 0);
-    setMaxMembers(workspace.max_members ?? 0);
-    setDefaultSaladMode(workspace.default_salad_mode || "full");
-  }
+  useEffect(() => {
+    if (workspace) {
+      setPlan(workspace.plan || "free");
+      setStatus(workspace.status || "active");
+      setSaladMinutesLimit(workspace.salad_minutes_limit ?? 0);
+      setStraicoCoinsLimit(workspace.straico_coins_limit ?? 0);
+      setMaxTranscriptions(workspace.max_transcriptions ?? 0);
+      setMaxFileSizeMb(workspace.max_file_size_mb ?? 0);
+      setMaxStorageGb(workspace.max_storage_gb ?? 0);
+      setMaxRagBases(workspace.max_rag_bases ?? 0);
+      setMaxAgents(workspace.max_agents ?? 0);
+      setMaxMembers(workspace.max_members ?? 0);
+      setDefaultSaladMode(workspace.default_salad_mode || "full");
+    }
+  }, [workspace]);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -253,7 +255,7 @@ function EditWorkspaceDialog({
               max_rag_bases: maxRagBases,
               max_agents: maxAgents,
               max_members: maxMembers,
-              default_salad_mode: defaultSaladMode as any,
+              default_salad_mode: defaultSaladMode,
             })}
             disabled={isSaving}
           >
