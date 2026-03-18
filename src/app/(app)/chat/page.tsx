@@ -146,7 +146,7 @@ export default function ChatPage() {
         question,
         conversationId: conversationId || undefined,
         model: selectedModel,
-        ragBaseId: transcriptionParam ? Number(transcriptionParam) : undefined,
+        transcriptionId: transcriptionParam ? Number(transcriptionParam) : undefined,
       }),
     onSuccess: (data) => {
       setMessages(prev => [
