@@ -146,7 +146,7 @@ export default function ProjectsPage() {
     queryFn: () =>
       apiGet(API_ROUTES.DATA("transcriptions"), {
         workspace_id: workspaceId || 0,
-        project_id: selectedProjectId || 0,
+        project_id: selectedProjectId,
       }),
     enabled: !!workspaceId && selectedProjectId !== null,
   });
@@ -160,10 +160,10 @@ export default function ProjectsPage() {
 
   // ---- derived data --------------------------------------------------------
 
-  const projects = projectsQuery.data ?? [];
-  const allTranscriptions = allTranscriptionsQuery.data ?? [];
-  const projectTranscriptions = projectTranscriptionsQuery.data ?? [];
-  const ragBases = ragQuery.data ?? [];
+  const projects = Array.isArray(projectsQuery.data) ? projectsQuery.data : (projectsQuery.data as any)?.data ?? [];
+  const allTranscriptions = Array.isArray(allTranscriptionsQuery.data) ? allTranscriptionsQuery.data : (allTranscriptionsQuery.data as any)?.data ?? [];
+  const projectTranscriptions = Array.isArray(projectTranscriptionsQuery.data) ? projectTranscriptionsQuery.data : (projectTranscriptionsQuery.data as any)?.data ?? [];
+  const ragBases = Array.isArray(ragQuery.data) ? ragQuery.data : (ragQuery.data as any)?.data ?? [];
 
   const transcriptionCountMap = useMemo(() => {
     const map = new Map<number, number>();
@@ -209,7 +209,7 @@ export default function ProjectsPage() {
     mutationFn: (data: { name: string; description: string; color: string }) =>
       apiPost(API_ROUTES.DATA("projects"), {
         workspace_id: workspaceId || 0,
-        owner_user_id: 0,
+        owner_user_id: workspace?.owner_user_id,
         name: data.name,
         description: data.description || null,
         color: data.color,
