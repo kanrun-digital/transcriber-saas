@@ -36,19 +36,20 @@ export function ChatInput({ onSend, isLoading, disabled }: ChatInputProps) {
   };
 
   return (
-    <div className="flex gap-2 items-end p-4 border-t bg-background">
+    <div className="flex gap-2 items-end p-4 border-t bg-background w-full max-w-full overflow-hidden">
       <Textarea
         ref={textareaRef}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Задайте питання по транскрипціям..."
-        className="min-h-[44px] max-h-[120px] resize-none"
+        placeholder="Задайте питання..."
+        className="min-h-[44px] max-h-[120px] resize-none flex-1 min-w-0"
         rows={1}
         disabled={isLoading || disabled}
       />
       <Button
         size="icon"
+        className="shrink-0"
         onClick={handleSubmit}
         disabled={!value.trim() || isLoading || disabled}
       >
