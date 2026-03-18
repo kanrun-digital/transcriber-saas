@@ -190,13 +190,43 @@ export default function TranscriptionDetailPage() {
             {tx.detected_language && <Badge variant="outline">{tx.detected_language}</Badge>}
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => syncRagMutation.mutate()}
-            disabled={tx.status !== "completed" || syncRagMutation.isPending}>
-            <RefreshCw className={`w-4 h-4 mr-1 ${syncRagMutation.isPending ? "animate-spin" : ""}`} />
-            Reindex
-          </Button>
-          {tx.status === "completed" && (
+        <div className="flex gap-2 flex-wrap">
+          {/* RAG buttons based on status */}
+          {tx.status === "completed" && tx.rag_status !== "synced" && (
+            <Button variant="outline" size="sm" onClick={() => syncRagMutation.mutate()}
+              disabled={syncRagMutation.isPending || tx.rag_status === "syncing"}>
+              <RefreshCw className={`w-4 h-4 mr-1 ${syncRagMutation.isPending ? "animate-spin" : ""}`} />
+              {tx.rag_status === "syncing" ? "Індексація..." : "Створити RAG"}
+            </Button>
+          )}
+          {tx.rag_status === "synced" && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => syncRagMutation.mutate()}
+                disabled={syncRagMutation.isPending}>
+                <RefreshCw className={`w-4 h-4 mr-1 ${syncRagMutation.isPending ? "animate-spin" : ""}`} />
+                Reindex
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => router.push(`/chat?transcription=${tx.id}`)}>
+                <MessageSquare className="w-4 h-4 mr-1" /> RAG Чат
+              </Button>
+              <Button variant="outline" size="sm" className="text-destructive" onClick={async () => {
+                if (!confirm("Видалити RAG базу?")) return;
+                try {
+                  const res = await fetch(`/api/rag/delete`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ transcriptionId: tx.id, workspaceId: tx.workspace_id }),
+                  });
+                  if (res.ok) { toast.success("RAG видалено"); queryClient.invalidateQueries({ queryKey: ["transcription", id] }); }
+                  else toast.error("Помилка видалення RAG");
+                } catch { toast.error("Помилка видалення RAG"); }
+              }}>
+                <Trash2 className="w-4 h-4 mr-1" /> Видалити RAG
+              </Button>
+            </>
+          )}
+          {tx.status === "completed" && tx.rag_status !== "synced" && (
             <Button variant="outline" size="sm" onClick={() => router.push(`/chat?transcription=${tx.id}`)}>
               <MessageSquare className="w-4 h-4 mr-1" /> Чат
             </Button>
