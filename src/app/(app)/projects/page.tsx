@@ -115,7 +115,7 @@ function colorDot(color: string | null) {
 // ---------------------------------------------------------------------------
 
 export default function ProjectsPage() {
-  const { workspace, workspaceId } = useWorkspace();
+  const { workspace, workspaceId, appUser } = useWorkspace();
   const qc = useQueryClient();
 
   // ---- local state ---------------------------------------------------------
@@ -146,7 +146,7 @@ export default function ProjectsPage() {
     queryFn: () =>
       apiGet(API_ROUTES.DATA("transcriptions"), {
         workspace_id: workspaceId || 0,
-        project_id: selectedProjectId || 0,
+        project_id: selectedProjectId,
       }),
     enabled: !!workspaceId && selectedProjectId !== null,
   });
@@ -209,7 +209,7 @@ export default function ProjectsPage() {
     mutationFn: (data: { name: string; description: string; color: string }) =>
       apiPost(API_ROUTES.DATA("projects"), {
         workspace_id: workspaceId || 0,
-        owner_user_id: 0,
+        owner_user_id: appUser?.id || 0,
         name: data.name,
         description: data.description || null,
         color: data.color,
@@ -475,7 +475,7 @@ export default function ProjectsPage() {
                       Додати транскрипцію
                     </Label>
                     <Select
-                      onValueChange={(val) => assignMutation.mutate(Number(val))}
+                      onValueChange={(val: any) => assignMutation.mutate(Number(val))}
                       disabled={assignMutation.isPending}
                     >
                       <SelectTrigger className="w-full">
@@ -550,7 +550,7 @@ export default function ProjectsPage() {
         title="Новий проєкт"
         description="Створіть проєкт для групування транскрипцій"
         isPending={createMutation.isPending}
-        onSubmit={(data) => createMutation.mutate(data)}
+        onSubmit={(data: any) => createMutation.mutate(data)}
       />
 
       {/* ------------------------------------------------------------------ */}
@@ -573,7 +573,7 @@ export default function ProjectsPage() {
               }
             : undefined
         }
-        onSubmit={(data) => {
+        onSubmit={(data: any) => {
           if (!editProject) return;
           updateMutation.mutate({ id: editProject.id, ...data });
         }}
