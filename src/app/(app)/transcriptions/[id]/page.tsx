@@ -19,6 +19,8 @@ import { ArrowLeft, Download, RefreshCw, Trash2, MessageSquare, Loader2, Play, X
 import { toast } from "sonner";
 import { formatBytes, formatDuration, formatDate } from "@/lib/utils";
 import { useWorkspace } from "@/hooks/use-workspace";
+import { useAuth } from "@/hooks/use-auth";
+import TranscriptComments from "@/components/transcriptions/comments";
 import type { TranscriptionSettings } from "@/types";
 
 export default function TranscriptionDetailPage() {
@@ -26,6 +28,7 @@ export default function TranscriptionDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { workspaceId } = useWorkspace();
+  const { appUser } = useAuth();
   const { settings, updateSetting, languages, diarizationAvailable } = useTranscriptionSettings();
   const [isStarting, setIsStarting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -369,6 +372,16 @@ export default function TranscriptionDetailPage() {
             </Tabs>
           </CardContent>
         </Card>
+      )}
+
+      {/* Comments */}
+      {tx.status === "completed" && appUser && (
+        <TranscriptComments
+          transcriptionId={String(tx.id)}
+          currentUserId={String(appUser.id)}
+          currentUserName={appUser.name || ""}
+          currentUserEmail={appUser.email || ""}
+        />
       )}
 
       {/* Error */}
