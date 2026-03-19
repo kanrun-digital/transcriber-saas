@@ -42,9 +42,18 @@ async function proxyRequest(req: NextRequest, path: string, body?: string) {
 
   // Forward ALL Set-Cookie headers from NCB
   const setCookies = res.headers.getSetCookie?.() || [];
-  for (const sc of setCookies) {
-    response.headers.append("Set-Cookie", sc);
+for (const sc of setCookies) {
+  // Remove Domain= so cookie works on our domain
+  const rewritten = sc.replace(/;\s*Domain=[^;]*/gi, "").replace(/__Secure-/g, "");
+  response.headers.append("Set-Cookie", rewritten);
+}
+if (setCookies.length === 0) {
+  const sc = res.headers.get("set-cookie");
+  if (sc) {
+    const rewritten = sc.replace(/;\s*Domain=[^;]*/gi, "").replace(/__Secure-/g, "");
+    response.headers.set("Set-Cookie", rewritten);
   }
+}
 
   // Fallback for older Node versions
   if (setCookies.length === 0) {
