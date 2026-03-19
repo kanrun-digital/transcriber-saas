@@ -124,14 +124,14 @@ export async function POST(req: NextRequest) {
       const srtS3Key = srtContent ? buildSrtKey(wsId, txId) : null;
 
       // 3e. Update NCB
-      const preview = text.substring(0, 500);
+      const preview = text.substring(0, 1500);
       const sentiment = output.overall_sentiment || null;
       const topics = output.overall_classification
         ? JSON.stringify([output.overall_classification]) : "[]";
 
       await ncb.update("transcriptions", tx.id, {
         status: "completed",
-        transcript_text: preview || text.substring(0, 500),
+        transcript_text: preview || text.substring(0, 1500),
         detected_language: job.input?.language_code || null,
         duration_seconds: Math.round(durationSec),
         num_speakers: speakers,
