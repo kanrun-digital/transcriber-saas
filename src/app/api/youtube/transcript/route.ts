@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
       updated_at: now(),
     });
 
-    const txId = txRecord.pk_id || txRecord.id;
+    const txId = (txRecord as any).pk_id || txRecord.id;
 
     // Upload artifacts to S3
     const textS3Key = buildTranscriptKey(workspaceId, txId);
