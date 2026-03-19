@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Download, RefreshCw, Trash2, MessageSquare, Loader2, Play, XCircle } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, Trash2, MessageSquare, Loader2, Play, XCircle, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import { formatBytes, formatDuration, formatDate } from "@/lib/utils";
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -274,6 +274,14 @@ export default function TranscriptionDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Add to Project */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><FolderOpen className="w-5 h-5" /> Проект</CardTitle></CardHeader>
+        <CardContent>
+          <ProjectAssigner transcriptionId={Number(id)} currentProjectId={tx.project_id} workspaceId={tx.workspace_id} />
+        </CardContent>
+      </Card>
+
       {/* Start Transcription — for uploaded files */}
       {tx.status === "uploaded" && (
         <Card>
@@ -412,6 +420,61 @@ export default function TranscriptionDetailPage() {
             </Button>
           </CardContent>
         </Card>
+      )}
+    </div>
+  );
+}
+
+// ============ Project Assigner ============
+
+function ProjectAssigner({ transcriptionId, currentProjectId, workspaceId }: { transcriptionId: number; currentProjectId: number | null; workspaceId: number }) {
+  const queryClient = useQueryClient();
+
+  const projectsQuery = useQuery({
+    queryKey: ["projects-list", workspaceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/data/projects?workspace_id=${workspaceId || 0}`, { credentials: "include" });
+      return res.json();
+    },
+    enabled: !!workspaceId,
+  });
+
+  const projects = Array.isArray(projectsQuery.data?.data) ? projectsQuery.data.data : [];
+  const currentProject = projects.find((p: any) => p.id === currentProjectId);
+
+  const handleAssign = async (projectId: string) => {
+    try {
+      const res = await fetch("/api/projects/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ transcriptionId, projectId: projectId === "none" ? null : Number(projectId) }),
+      });
+      if (res.ok) {
+        toast.success(projectId === "none" ? "Видалено з проекту" : "Додано до проекту");
+        queryClient.invalidateQueries({ queryKey: ["transcription"] });
+      }
+    } catch {
+      toast.error("Помилка");
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      {currentProject ? (
+        <div className="flex items-center justify-between">
+          <span className="text-sm">Проект: <strong>{currentProject.name}</strong></span>
+          <Button variant="outline" size="sm" onClick={() => handleAssign("none")}>Видалити</Button>
+        </div>
+      ) : (
+        <Select onValueChange={handleAssign}>
+          <SelectTrigger><SelectValue placeholder="Додати до проекту..." /></SelectTrigger>
+          <SelectContent>
+            {projects.map((p: any) => (
+              <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
     </div>
   );
