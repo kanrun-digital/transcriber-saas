@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     await ncb.requireAuth(req);
     const cookie = ncb.getCookie(req);
     const body = await req.json() as any;
-    const { workspaceId, message, conversationId, model, systemPrompt } = body;
+    const { workspaceId, message, conversationId, model, systemPrompt, transcriptionId } = body;
 
     if (!workspaceId || !message) {
       return NextResponse.json({ error: "workspaceId and message required" }, { status: 400 });
@@ -66,6 +66,17 @@ export async function POST(req: NextRequest) {
         if (meta.chat_context_chars) maxChars = Number(meta.chat_context_chars);
       }
     } catch {}
+
+    // If transcriptionId provided — load transcript text as context
+    let transcriptContext: string | null = null;
+    if (transcriptionId) {
+      try {
+        const tx = await ncb.readOne<any>("transcriptions", transcriptionId);
+        if (tx?.transcript_text) {
+          transcriptContext = tx.transcript_text;
+        }
+      } catch {}
+    }
 
     let convId = conversationId;
     let history: Array<{ role: string; content: string }> = [];
@@ -105,7 +116,17 @@ export async function POST(req: NextRequest) {
 
     const trimmedHistory = trimHistory(history, maxChars, maxMessages);
     const allMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
-    if (systemPrompt) allMessages.push({ role: "system", content: systemPrompt });
+
+    // Add transcript context as system prompt
+    if (transcriptContext) {
+      const contextPrompt = `Ти — AI асистент для аналізу транскрипцій. Нижче наданий текст транскрипції. Відповідай на питання українською мовою, базуючись на цьому тексті. Якщо відповіді немає в тексті — скажи про це.\n\n--- ТРАНСКРИПЦІЯ ---\n${transcriptContext.substring(0, 15000)}\n--- КІНЕЦЬ ТРАНСКРИПЦІЇ ---`;
+      allMessages.push({ role: "system", content: contextPrompt });
+    }
+
+    if (systemPrompt && !transcriptContext) {
+      allMessages.push({ role: "system", content: systemPrompt });
+    }
+
     allMessages.push(...trimmedHistory.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })));
     allMessages.push({ role: "user", content: message });
 
