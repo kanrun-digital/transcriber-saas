@@ -4,7 +4,7 @@
 // No new table needed — piggybacks on existing transcriptions row.
 
 import { NextRequest, NextResponse } from "next/server"
-import { ncb } from "@/lib/ncb"
+import * as ncb from "@/lib/ncb";
 
 // ---------- Types ----------
 
