@@ -31,6 +31,8 @@ export default function TranscriptionDetailPage() {
   const queryClient = useQueryClient();
   const { workspaceId } = useWorkspace();
   const { appUser } = useAuth();
+  const [fullText, setFullText] = useState("");
+  const [isLoadingText, setIsLoadingText] = useState(false);
   const { settings, updateSetting, languages, diarizationAvailable } = useTranscriptionSettings();
   const [isStarting, setIsStarting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -50,6 +52,17 @@ export default function TranscriptionDetailPage() {
     queryFn: () => transcriptionsService.getArtifactUrls(Number(id)),
     enabled: tx?.status === "completed",
   });
+  
+useEffect(() => {
+  if (artifacts?.textUrl && !fullText) {
+    setIsLoadingText(true);
+    fetch(artifacts.textUrl)
+      .then((r) => r.text())
+      .then((text) => setFullText(text))
+      .catch(() => setFullText(""))
+      .finally(() => setIsLoadingText(false));
+  }
+}, [artifacts?.textUrl, fullText]);
 
   // Load presets
   const { data: presetsData } = useQuery({
@@ -369,7 +382,13 @@ export default function TranscriptionDetailPage() {
               </TabsList>
               <TabsContent value="text" className="mt-4">
                 <div className="prose prose-sm max-w-none whitespace-pre-wrap bg-muted/30 rounded-lg p-4 max-h-[600px] overflow-y-auto">
-                  {tx.transcript_text || "Завантажте повний текст через кнопку TXT"}
+                  {isLoadingText ? (
+  
+     Завантаження повного тексту...
+  
+
+) : (fullText || tx.transcript_text || "Текст не знайдено")}
+
                 </div>
               </TabsContent>
               {tx.summary && (
