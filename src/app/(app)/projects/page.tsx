@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,6 +45,9 @@ import {
   FileText,
   Brain,
   Search,
+  Upload,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -80,6 +83,12 @@ interface RagBase {
   [key: string]: unknown;
 }
 
+interface BulkFileItem {
+  file: File;
+  status: "pending" | "uploading" | "done" | "error";
+  error?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -96,6 +105,11 @@ const PROJECT_COLORS = [
 ] as const;
 
 const DEFAULT_COLOR = PROJECT_COLORS[0].value;
+
+const ACCEPTED_MEDIA_TYPES = [
+  "audio/*",
+  "video/*",
+].join(",");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -124,6 +138,11 @@ export default function ProjectsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [deleteProject, setDeleteProject] = useState<Project | null>(null);
+
+  // Bulk upload state
+  const [bulkFiles, setBulkFiles] = useState<BulkFileItem[]>([]);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const bulkInputRef = useRef<HTMLInputElement>(null);
 
   // ---- queries -------------------------------------------------------------
 
@@ -196,6 +215,129 @@ export default function ProjectsPage() {
   }, [projects, searchQuery]);
 
   const selectedProject = projects.find((p: any) => p.id === selectedProjectId) ?? null;
+
+  // ---- bulk upload logic ----------------------------------------------------
+
+  const bulkDoneCount = bulkFiles.filter((f: any) => f.status === "done").length;
+  const bulkErrorCount = bulkFiles.filter((f: any) => f.status === "error").length;
+  const bulkTotalCount = bulkFiles.length;
+
+  const handleBulkFilesSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+
+    const items: BulkFileItem[] = Array.from(fileList).map((file: any) => ({
+      file,
+      status: "pending" as const,
+    }));
+    setBulkFiles(items);
+    // Reset file input so re-selecting the same files triggers onChange
+    if (bulkInputRef.current) {
+      bulkInputRef.current.value = "";
+    }
+  }, []);
+
+  const handleBulkUpload = useCallback(async () => {
+    if (bulkFiles.length === 0 || !selectedProjectId) return;
+
+    setBulkUploading(true);
+
+    const updated = [...bulkFiles];
+
+    for (let i = 0; i < updated.length; i++) {
+      const item = updated[i];
+      if (item.status === "done") continue;
+
+      // Mark uploading
+      updated[i] = { ...item, status: "uploading" };
+      setBulkFiles([...updated]);
+
+      try {
+        // Step 1: Presign
+        const presignRes = await fetch("/api/upload/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: item.file.name,
+            contentType: item.file.type || "application/octet-stream",
+            size: item.file.size,
+            workspaceId: workspaceId || 0,
+            appUserId: appUser?.id || 0,
+            projectId: selectedProjectId,
+          }),
+        });
+
+        if (!presignRes.ok) {
+          throw new Error(`Presign failed: ${presignRes.status}`);
+        }
+
+        const presignData = await presignRes.json();
+        const presignedUrl = presignData.presignedUrl || presignData.url;
+        const transcriptionId = presignData.transcriptionId;
+
+        if (!presignedUrl) {
+          throw new Error("No presigned URL returned");
+        }
+
+        // Step 2: Upload to S3
+        const uploadRes = await fetch(presignedUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": item.file.type || "application/octet-stream",
+          },
+          body: item.file,
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error(`S3 upload failed: ${uploadRes.status}`);
+        }
+
+        // Step 3: Complete (no settings for bulk — transcription starts manually)
+        const completeRes = await fetch("/api/upload/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcriptionId,
+            workspaceId: workspaceId || 0,
+            settings: {},
+          }),
+        });
+
+        if (!completeRes.ok) {
+          throw new Error(`Complete failed: ${completeRes.status}`);
+        }
+
+        updated[i] = { ...item, status: "done" };
+        setBulkFiles([...updated]);
+      } catch (err: any) {
+        updated[i] = {
+          ...item,
+          status: "error",
+          error: err?.message || "Невідома помилка",
+        };
+        setBulkFiles([...updated]);
+      }
+    }
+
+    setBulkUploading(false);
+
+    const doneCount = updated.filter((f: any) => f.status === "done").length;
+    const errCount = updated.filter((f: any) => f.status === "error").length;
+
+    if (errCount === 0) {
+      toast.success(`Завантажено ${doneCount} ${pluralFiles(doneCount)}`);
+    } else {
+      toast.warning(`Завантажено ${doneCount}/${updated.length}, помилок: ${errCount}`);
+    }
+
+    // Refresh transcription lists
+    qc.invalidateQueries({ queryKey: ["transcriptions", workspaceId] });
+    qc.invalidateQueries({ queryKey: ["transcriptions", workspaceId, selectedProjectId] });
+  }, [bulkFiles, selectedProjectId, workspaceId, appUser, qc]);
+
+  const handleBulkClear = useCallback(() => {
+    setBulkFiles([]);
+  }, []);
 
   // ---- mutations -----------------------------------------------------------
 
@@ -490,6 +632,119 @@ export default function ProjectsPage() {
                   </div>
                 )}
 
+                {/* ---- Bulk Upload Section ---- */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">
+                    Масове завантаження
+                  </Label>
+
+                  <input
+                    ref={bulkInputRef}
+                    type="file"
+                    multiple
+                    accept={ACCEPTED_MEDIA_TYPES}
+                    className="hidden"
+                    onChange={handleBulkFilesSelected}
+                  />
+
+                  {bulkFiles.length === 0 ? (
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={() => bulkInputRef.current?.click()}
+                      disabled={bulkUploading}
+                    >
+                      <Upload className="h-4 w-4" />
+                      Обрати аудіо/відео файли
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      {/* Progress summary */}
+                      {bulkTotalCount > 0 && (
+                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+                          <span>
+                            {bulkUploading
+                              ? `Завантажено ${bulkDoneCount}/${bulkTotalCount} ${pluralFiles(bulkTotalCount)}`
+                              : bulkDoneCount === bulkTotalCount && bulkErrorCount === 0
+                              ? `Завантажено ${bulkDoneCount} ${pluralFiles(bulkDoneCount)}`
+                              : `Обрано ${bulkTotalCount} ${pluralFiles(bulkTotalCount)}`}
+                          </span>
+                          {bulkErrorCount > 0 && (
+                            <span className="text-destructive text-xs">
+                              Помилок: {bulkErrorCount}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* File list */}
+                      <ul className="space-y-1 max-h-[200px] overflow-y-auto">
+                        {bulkFiles.map((item: any, idx: any) => (
+                          <li
+                            key={idx}
+                            className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs"
+                          >
+                            {item.status === "done" && (
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
+                            )}
+                            {item.status === "error" && (
+                              <XCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                            )}
+                            {item.status === "uploading" && (
+                              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+                            )}
+                            {item.status === "pending" && (
+                              <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            )}
+                            <span className="truncate flex-1">{item.file.name}</span>
+                            {item.status === "error" && item.error && (
+                              <span className="text-destructive truncate max-w-[100px]" title={item.error}>
+                                {item.error}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2">
+                        {bulkDoneCount < bulkTotalCount && (
+                          <Button
+                            size="sm"
+                            className="flex-1 gap-1"
+                            disabled={bulkUploading}
+                            onClick={handleBulkUpload}
+                          >
+                            {bulkUploading ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Upload className="h-3.5 w-3.5" />
+                            )}
+                            {bulkUploading ? "Завантаження…" : "Завантажити"}
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={bulkUploading}
+                          onClick={handleBulkClear}
+                        >
+                          Очистити
+                        </Button>
+                        {!bulkUploading && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => bulkInputRef.current?.click()}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <Separator />
 
                 {/* Transcription list */}
@@ -752,4 +1007,17 @@ function pluralTranscriptions(n: number): string {
   if (lastDigit === 1) return "транскрипція";
   if (lastDigit >= 2 && lastDigit <= 4) return "транскрипції";
   return "транскрипцій";
+}
+
+// ---------------------------------------------------------------------------
+// Ukrainian pluralization for "файл"
+// ---------------------------------------------------------------------------
+
+function pluralFiles(n: number): string {
+  const abs = Math.abs(n) % 100;
+  const lastDigit = abs % 10;
+  if (abs >= 11 && abs <= 19) return "файлів";
+  if (lastDigit === 1) return "файл";
+  if (lastDigit >= 2 && lastDigit <= 4) return "файли";
+  return "файлів";
 }
