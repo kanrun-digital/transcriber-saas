@@ -74,6 +74,7 @@ export default function UploadPage() {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [isUrlLoading, setIsUrlLoading] = useState(false);
   const [activePresetName, setActivePresetName] = useState<string | null>(null);
+  const [selectedPresetId, setSelectedPresetId] = useState<number | null>(null);
 
   const { startUpload, phase, progress, file, transcriptionId, error, cancelUpload, reset } = useUpload();
   const { settings, languages, diarizationAvailable, updateSetting, applyPreset } = useTranscriptionSettings();
@@ -165,7 +166,7 @@ export default function UploadPage() {
   };
 
   const handlePresetApply = (preset: Preset | null) => {
-    if (!preset) { setActivePresetName(null); return; }
+    if (!preset) { setActivePresetName(null); setSelectedPresetId(null); return; }
     if (preset.config_json) {
       try {
         const config = typeof preset.config_json === "string"
@@ -174,6 +175,7 @@ export default function UploadPage() {
       } catch {}
     }
     setActivePresetName(preset.title);
+    setSelectedPresetId(preset.id);
     toast.success(`Пресет "${preset.title}" застосовано`);
   };
 
@@ -337,7 +339,7 @@ export default function UploadPage() {
               {/* Preset selector */}
               <div className="space-y-2">
                 <Label className="text-base font-semibold">Пресет (необов'язково)</Label>
-                <PresetSelector onPresetSelect={handlePresetApply} />
+                <PresetSelector onPresetSelect={handlePresetApply} selectedPresetId={selectedPresetId} />
               </div>
 
               {/* Settings panel */}
