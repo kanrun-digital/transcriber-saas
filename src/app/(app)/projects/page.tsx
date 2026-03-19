@@ -272,7 +272,7 @@ export default function ProjectsPage() {
         }
 
         const presignData = await presignRes.json();
-        const presignedUrl = presignData.presignedUrl || presignData.url;
+        const presignedUrl = presignData.uploadUrl || presignData.presignedUrl || presignData.url;
         const transcriptionId = presignData.transcriptionId;
 
         if (!presignedUrl) {
