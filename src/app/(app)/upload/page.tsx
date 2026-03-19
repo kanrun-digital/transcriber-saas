@@ -469,8 +469,8 @@ export default function UploadPage() {
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
-            url: urlResult.directUrl,
-            source: urlResult.source,
+            url: (urlResult as any)?.directUrl,
+            source: (urlResult as any)?.source,
             workspaceId,
             settings,
           }),
@@ -810,11 +810,11 @@ export default function UploadPage() {
                       <AlertDescription>{urlError}</AlertDescription>
                     </Alert>
                   )}
-                  {urlResult && (
+                  {(urlResult as any) && (
                     <Alert>
                       <CheckCircle2 className="h-4 w-4" />
                       <AlertDescription>
-                        <strong>{urlResult.source}</strong> — посилання готове до
+                        <strong>{(urlResult as any)?.source}</strong> — посилання готове до
                         обробки
                       </AlertDescription>
                     </Alert>
@@ -950,12 +950,12 @@ export default function UploadPage() {
             </Alert>
           )}
 
-          {urlResult && (
+          {(urlResult as any) && (
             <Alert>
               <CheckCircle2 className="h-4 w-4" />
               <AlertDescription>
-                <strong>{urlResult.source}</strong> —{" "}
-                {urlResult.directUrl.substring(0, 60)}...
+                <strong>{(urlResult as any)?.source}</strong> —{" "}
+                {(urlResult as any)?.directUrl.substring(0, 60)}...
               </AlertDescription>
             </Alert>
           )}
