@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as ncb from "@/lib/ncb";
+import {
+  uploadText, uploadJson, buildTranscriptKey, buildTranscriptJsonKey,
+  buildSrtKey, getDownloadUrl,
+} from "@/lib/s3";
 // @ts-ignore — youtube-transcript doesn't have types
 import { YoutubeTranscript } from "youtube-transcript";
 
@@ -7,9 +11,14 @@ function now(): string {
   return new Date().toISOString().slice(0, 19).replace("T", " ");
 }
 
-/**
- * Extract YouTube video ID from URL
- */
+function formatTime(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 function extractVideoId(url: string): string | null {
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/,
@@ -29,12 +38,12 @@ function extractVideoId(url: string): string | null {
  * 
  * 1. Extract video ID
  * 2. Fetch YouTube captions via youtube-transcript package
- * 3. Save as completed transcription
+ * 3. Upload artifacts to S3 (TXT, SRT, JSON)
+ * 4. Save preview in NCB + S3 keys for download
  */
 export async function POST(req: NextRequest) {
   try {
-    const session = await ncb.requireAuth(req);
-    const cookie = ncb.getCookie(req);
+    await ncb.requireAuth(req);
     const body = await req.json() as any;
     const { url, workspaceId, language } = body;
 
@@ -46,10 +55,6 @@ export async function POST(req: NextRequest) {
     if (!videoId) {
       return NextResponse.json({ error: "Невірний YouTube URL" }, { status: 400 });
     }
-
-    // Resolve app_user_id from session
-    const appUser = await ncb.findOne<any>("app_users", { ncb_user_id: session.user.id });
-    const appUserId = appUser?.id ?? 0;
 
     // Fetch transcript using youtube-transcript package
     let segments: Array<{ text: string; offset: number; duration: number }> = [];
@@ -103,10 +108,41 @@ export async function POST(req: NextRequest) {
     const lastSeg = segments[segments.length - 1];
     const durationSec = lastSeg ? Math.round((lastSeg.offset + lastSeg.duration) / 1000) : 0;
 
-    // Save as completed transcription using user context (RLS)
-    const txRecord = await ncb.createAsUser("transcriptions", cookie, {
+    // Build timestamped text
+    const timestampedText = segments.map((s: any) => {
+      const start = formatTime(s.offset);
+      const end = formatTime(s.offset + s.duration);
+      return `[${start} - ${end}] ${s.text}`;
+    }).join("\n");
+
+    // Build SRT
+    const srtContent = segments.map((s: any, i: number) => {
+      const startMs = s.offset;
+      const endMs = s.offset + s.duration;
+      const startSrt = formatTime(startMs).replace(/^(\d{2}):/, "$1:") + ",000";
+      const endSrt = formatTime(endMs).replace(/^(\d{2}):/, "$1:") + ",000";
+      return `${i + 1}\n${startSrt} --> ${endSrt}\n${s.text}\n`;
+    }).join("\n");
+
+    // Build JSON transcript
+    const jsonTranscript = {
+      videoId,
+      videoTitle,
+      language: detectedLang,
+      duration: durationSec,
+      wordCount,
+      segments: segments.map((s: any) => ({
+        text: s.text,
+        start: s.offset / 1000,
+        end: (s.offset + s.duration) / 1000,
+      })),
+    };
+
+    // Create NCB record first to get ID
+    const preview = fullText.substring(0, 500);
+    const txRecord = await ncb.create("transcriptions", {
       workspace_id: workspaceId,
-      app_user_id: appUserId,
+      app_user_id: 0,
       original_filename: videoTitle,
       storage_url: url,
       source_type: "youtube",
@@ -114,10 +150,37 @@ export async function POST(req: NextRequest) {
       salad_mode: "full",
       language: detectedLang,
       detected_language: detectedLang,
-      transcript_text: fullText.substring(0, 10000),
+      transcript_text: preview,
       word_count: wordCount,
       duration_seconds: durationSec,
       created_at: now(),
+      updated_at: now(),
+    });
+
+    const txId = txRecord.pk_id || txRecord.id;
+
+    // Upload artifacts to S3
+    const textS3Key = buildTranscriptKey(workspaceId, txId);
+    const jsonS3Key = buildTranscriptJsonKey(workspaceId, txId);
+    const srtS3Key = buildSrtKey(workspaceId, txId);
+
+    await Promise.all([
+      uploadText(textS3Key, timestampedText),
+      uploadJson(jsonS3Key, jsonTranscript),
+      uploadText(srtS3Key, srtContent),
+    ]);
+
+    // Update NCB with S3 keys
+    await ncb.update("transcriptions", txId, {
+      transcript_text_url: textS3Key,
+      srt_content_url: srtS3Key,
+      metadata_json: JSON.stringify({
+        videoId,
+        youtubeUrl: url,
+        jsonS3Key,
+        segmentCount: segments.length,
+        textLength: fullText.length,
+      }),
       updated_at: now(),
     });
 
@@ -130,7 +193,7 @@ export async function POST(req: NextRequest) {
       language: detectedLang,
       wordCount,
       durationSeconds: durationSec,
-      textPreview: fullText.substring(0, 200),
+      textPreview: preview.substring(0, 200),
     });
   } catch (error: any) {
     if (error instanceof Response) return new NextResponse(error.body, { status: error.status });
