@@ -381,11 +381,12 @@ useEffect(() => {
               </TabsList>
               <TabsContent value="text" className="mt-4">
                 <div className="prose prose-sm max-w-none whitespace-pre-wrap bg-muted/30 rounded-lg p-4 max-h-[600px] overflow-y-auto">
-                                   {isLoadingText ? (
+                  {isLoadingText ? (
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" /> Завантаження повного тексту...
                     </div>
                   ) : (fullText || tx.transcript_text || "Текст не знайдено")}
+
                 </div>
               </TabsContent>
               {tx.summary && (
