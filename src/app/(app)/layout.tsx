@@ -44,14 +44,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main
           className={
             isChatPage
-              ? "flex-1 overflow-hidden pb-14 md:pb-0"
+              ? "flex-1 overflow-hidden"
               : "flex-1 p-4 md:p-6 lg:p-8 pb-20 md:pb-6 lg:pb-8"
           }
         >
           {children}
         </main>
       </SidebarInset>
-      <BottomNav />
+      {!isChatPage && <BottomNav />}
     </SidebarProvider>
   );
 }
