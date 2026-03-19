@@ -40,7 +40,7 @@ export function AppSidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.map((item: any) => {
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + "/");
           return (
