@@ -303,7 +303,7 @@ export default function UploadPage() {
     setBatchUploadedCount(0);
 
     const workspaceId = workspace.id || 0;
-    const appUserId = appUser?.id || null;
+    const appUserId = appUser?.id ? String(appUser.id) : null;
 
     let uploadedCount = 0;
 
