@@ -23,11 +23,13 @@ async function proxyRequest(req: NextRequest, path: string, body?: string) {
   const res = await fetch(url, {
     method: req.method,
     headers: {
-      "Content-Type": "application/json",
-      "X-Database-Instance": NCB_CONFIG.instance,
-      "Authorization": `Bearer ${NCB_CONFIG.secretKey}`,
-      "Cookie": req.headers.get("cookie") || "",
-    },
+  "Content-Type": "application/json",
+  "X-Database-Instance": NCB_CONFIG.instance,
+  "Authorization": `Bearer ${NCB_CONFIG.secretKey}`,
+  "Cookie": req.headers.get("cookie") || "",
+  "Origin": process.env["NEXT_PUBLIC_APP_URL"] || req.nextUrl.origin,
+  "Referer": (process.env["NEXT_PUBLIC_APP_URL"] || req.nextUrl.origin) + "/",
+},
     body: body || undefined,
   });
 
