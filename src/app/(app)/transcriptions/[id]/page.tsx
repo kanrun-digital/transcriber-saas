@@ -22,6 +22,8 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import { useAuth } from "@/hooks/use-auth";
 import TranscriptComments from "@/components/transcriptions/comments";
 import type { TranscriptionSettings } from "@/types";
+import { useState, useCallback, useEffect } from "react";
+
 
 export default function TranscriptionDetailPage() {
   const { id } = useParams<{ id: string }>();
