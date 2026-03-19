@@ -21,11 +21,11 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 // ============ Config ============
 
 const config = {
-  endpoint: process.env.S3_ENDPOINT!,
-  bucket: process.env.S3_BUCKET!,
-  region: process.env.S3_REGION || "EU",
-  accessKeyId: process.env.S3_ACCESS_KEY!,
-  secretAccessKey: process.env.S3_SECRET_KEY!,
+  endpoint: process.env["S3_ENDPOINT"]!,
+  bucket: process.env["S3_BUCKET"]!,
+  region: process.env["S3_REGION"] || "EU",
+  accessKeyId: process.env["S3_ACCESS_KEY"]!,
+  secretAccessKey: process.env["S3_SECRET_KEY"]!,
 };
 
 const client = new S3Client({
