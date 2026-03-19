@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       workspace_id: workspaceId,
       owner_user_id: appUserId,
       entity_type: "generic",
-      bucket_name: process.env.S3_BUCKET!,
+      bucket_name: process.env["S3_BUCKET"]!,
       object_key: s3Key,
       original_name: filename,
       mime_type: contentType,
