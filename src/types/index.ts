@@ -74,6 +74,7 @@ export interface Transcription {
   project_id: number | null;
   storage_path: string | null;
   storage_url: string | null;
+  source_type: string | null;
   original_filename: string | null;
   mime_type: string | null;
   file_size_bytes: number | null;
