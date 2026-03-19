@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     const downloadUrl = await getDownloadUrl(tx.storage_path, 7200);
 
     // 6. Create Salad job with ALL settings
-    const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/transcribe/webhook`;
+    const webhookUrl = `${process.env["NEXT_PUBLIC_APP_URL"]}/api/transcribe/webhook`;
 
     const job = await createTranscriptionJob({
       url: downloadUrl,
