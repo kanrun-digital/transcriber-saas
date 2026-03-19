@@ -109,7 +109,8 @@ async function presignFile(
     const err = await res.json().catch(() => ({ error: "Presign failed" }));
     throw new Error(err.error || "Помилка отримання URL для завантаження");
   }
-  return res.json();
+  const data = await res.json();
+  return { presignedUrl: data.uploadUrl || data.presignedUrl, transcriptionId: String(data.transcriptionId || data.id) };
 }
 
 async function uploadToS3(
