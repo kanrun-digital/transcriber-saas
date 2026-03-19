@@ -184,11 +184,18 @@ export default function TranscriptionDetailPage() {
             <ArrowLeft className="w-4 h-4 mr-1" /> Назад
           </Button>
           <h1 className="text-2xl font-bold">{tx.original_filename || `Транскрипція #${tx.id}`}</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <StatusBadge status={tx.status} ragStatus={tx.rag_status} />
+            {tx.source_type === "youtube" && <Badge variant="secondary" className="bg-red-500/10 text-red-500 border-red-500/20">🎬 YouTube</Badge>}
+            {tx.source_type === "url" && <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 border-blue-500/20">🔗 URL</Badge>}
             {tx.salad_mode && <Badge variant="outline">{tx.salad_mode === "full" ? "Full" : "Lite"}</Badge>}
             {tx.detected_language && <Badge variant="outline">{tx.detected_language}</Badge>}
           </div>
+          {tx.storage_url && (tx.source_type === "youtube" || tx.source_type === "url") && (
+            <a href={tx.storage_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline truncate max-w-md block">
+              {tx.storage_url}
+            </a>
+          )}
         </div>
         <div className="flex gap-2 flex-wrap">
           {/* RAG buttons based on status */}
