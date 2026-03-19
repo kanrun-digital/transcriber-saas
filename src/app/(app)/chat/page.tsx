@@ -212,7 +212,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] md:h-[calc(100vh-4rem)] overflow-hidden relative">
+    <div className="flex h-screen md:h-[calc(100vh-4rem)] overflow-hidden relative">
       {/* ===== MOBILE: Chat history sidebar overlay ===== */}
       {sidebarOpen && (
         <div className="md:hidden fixed inset-0 z-50">
