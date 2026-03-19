@@ -39,7 +39,7 @@ function extractVideoId(url: string): string | null {
  * 1. Extract video ID
  * 2. Fetch YouTube captions via youtube-transcript package
  * 3. Upload artifacts to S3 (TXT, SRT, JSON)
- * 4. Save preview in NCB + S3 keys for download
+ * 4. Save preview in NCB + S3 keys for download (single create)
  */
 export async function POST(req: NextRequest) {
   try {
@@ -138,8 +138,21 @@ export async function POST(req: NextRequest) {
       })),
     };
 
-    // Create NCB record first to get ID
     const preview = fullText.substring(0, 500);
+
+    // Upload artifacts to S3 FIRST (use timestamp as temp ID)
+    const tempId = Date.now().toString();
+    const textS3Key = buildTranscriptKey(workspaceId, tempId);
+    const jsonS3Key = buildTranscriptJsonKey(workspaceId, tempId);
+    const srtS3Key = buildSrtKey(workspaceId, tempId);
+
+    await Promise.all([
+      uploadText(textS3Key, timestampedText),
+      uploadJson(jsonS3Key, jsonTranscript),
+      uploadText(srtS3Key, srtContent),
+    ]);
+
+    // Single NCB create with ALL fields including S3 keys
     const txRecord = await ncb.create("transcriptions", {
       workspace_id: workspaceId,
       app_user_id: 0,
@@ -151,29 +164,10 @@ export async function POST(req: NextRequest) {
       language: detectedLang,
       detected_language: detectedLang,
       transcript_text: preview,
-      word_count: wordCount,
-      duration_seconds: durationSec,
-      created_at: now(),
-      updated_at: now(),
-    });
-
-    const txId = (txRecord as any).pk_id || txRecord.id;
-
-    // Upload artifacts to S3
-    const textS3Key = buildTranscriptKey(workspaceId, txId);
-    const jsonS3Key = buildTranscriptJsonKey(workspaceId, txId);
-    const srtS3Key = buildSrtKey(workspaceId, txId);
-
-    await Promise.all([
-      uploadText(textS3Key, timestampedText),
-      uploadJson(jsonS3Key, jsonTranscript),
-      uploadText(srtS3Key, srtContent),
-    ]);
-
-    // Update NCB with S3 keys
-    await ncb.update("transcriptions", txId, {
       transcript_text_url: textS3Key,
       srt_content_url: srtS3Key,
+      word_count: wordCount,
+      duration_seconds: durationSec,
       metadata_json: JSON.stringify({
         videoId,
         youtubeUrl: url,
@@ -181,6 +175,7 @@ export async function POST(req: NextRequest) {
         segmentCount: segments.length,
         textLength: fullText.length,
       }),
+      created_at: now(),
       updated_at: now(),
     });
 
