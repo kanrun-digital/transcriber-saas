@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { ChatInput } from "@/components/chat/chat-input";
@@ -40,6 +40,7 @@ interface Conversation {
 
 export default function ChatPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const transcriptionParam = searchParams.get("transcription");
   const { workspace } = useWorkspace();
   const queryClient = useQueryClient();
@@ -327,6 +328,10 @@ export default function ChatPage() {
         {/* ===== MOBILE HEADER ===== */}
         <div className="flex md:hidden items-center justify-between px-3 py-2 border-b bg-background/95 backdrop-blur min-h-[52px]">
           <div className="flex items-center gap-2">
+            {/* Back to dashboard on mobile */}
+            <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => router.push("/dashboard")}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
