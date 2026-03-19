@@ -33,7 +33,8 @@ function extractVideoId(url: string): string | null {
  */
 export async function POST(req: NextRequest) {
   try {
-    await ncb.requireAuth(req);
+    const session = await ncb.requireAuth(req);
+    const cookie = ncb.getCookie(req);
     const body = await req.json() as any;
     const { url, workspaceId, language } = body;
 
@@ -45,6 +46,10 @@ export async function POST(req: NextRequest) {
     if (!videoId) {
       return NextResponse.json({ error: "Невірний YouTube URL" }, { status: 400 });
     }
+
+    // Resolve app_user_id from session
+    const appUser = await ncb.findOne<any>("app_users", { ncb_user_id: session.user.id });
+    const appUserId = appUser?.id ?? 0;
 
     // Fetch transcript using youtube-transcript package
     let segments: Array<{ text: string; offset: number; duration: number }> = [];
@@ -98,10 +103,10 @@ export async function POST(req: NextRequest) {
     const lastSeg = segments[segments.length - 1];
     const durationSec = lastSeg ? Math.round((lastSeg.offset + lastSeg.duration) / 1000) : 0;
 
-    // Save as completed transcription
-    const txRecord = await ncb.create("transcriptions", {
+    // Save as completed transcription using user context (RLS)
+    const txRecord = await ncb.createAsUser("transcriptions", cookie, {
       workspace_id: workspaceId,
-      app_user_id: 0,
+      app_user_id: appUserId,
       original_filename: videoTitle,
       storage_url: url,
       source_type: "youtube",
