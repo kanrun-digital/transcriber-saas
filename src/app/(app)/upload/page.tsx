@@ -165,7 +165,7 @@ async function runWithConcurrency(
 
 export default function UploadPage() {
   const router = useRouter();
-  const { workspace } = useWorkspace();
+  const { workspace, appUser } = useWorkspace();
 
   // Tab state
   const [activeTab, setActiveTab] = useState<UploadMode>("file");
@@ -303,7 +303,7 @@ export default function UploadPage() {
     setBatchUploadedCount(0);
 
     const workspaceId = workspace.id || 0;
-    const appUserId = (workspace as any).appUserId || null;
+    const appUserId = appUser?.id || null;
 
     let uploadedCount = 0;
 
