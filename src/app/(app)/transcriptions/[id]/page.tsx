@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { transcriptionsService } from "@/services/transcriptions";
@@ -14,24 +15,17 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Download, RefreshCw, Trash2, MessageSquare, Loader2, Play, XCircle, FolderOpen } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, Trash2, MessageSquare, Loader2, Play, XCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { formatBytes, formatDuration, formatDate } from "@/lib/utils";
 import { useWorkspace } from "@/hooks/use-workspace";
-import { useAuth } from "@/hooks/use-auth";
-import TranscriptComments from "@/components/transcriptions/comments";
 import type { TranscriptionSettings } from "@/types";
-import { useState, useCallback, useEffect } from "react";
-
 
 export default function TranscriptionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { workspaceId } = useWorkspace();
-  const { appUser } = useAuth();
-  const [fullText, setFullText] = useState("");
-  const [isLoadingText, setIsLoadingText] = useState(false);
   const { settings, updateSetting, languages, diarizationAvailable } = useTranscriptionSettings();
   const [isStarting, setIsStarting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -51,17 +45,6 @@ export default function TranscriptionDetailPage() {
     queryFn: () => transcriptionsService.getArtifactUrls(Number(id)),
     enabled: tx?.status === "completed",
   });
-  
-useEffect(() => {
-  if (artifacts?.textUrl && !fullText) {
-    setIsLoadingText(true);
-    fetch(artifacts.textUrl)
-      .then((r) => r.text())
-      .then((text) => setFullText(text))
-      .catch(() => setFullText(""))
-      .finally(() => setIsLoadingText(false));
-  }
-}, [artifacts?.textUrl, fullText]);
 
   // Load presets
   const { data: presetsData } = useQuery({
@@ -250,11 +233,19 @@ useEffect(() => {
               </Button>
             </>
           )}
-          {tx.status === "completed" && tx.rag_status !== "synced" && (
-            <Button variant="outline" size="sm" onClick={() => router.push(`/chat?transcription=${tx.id}`)}>
-              <MessageSquare className="w-4 h-4 mr-1" /> Чат
+
+          {/* Chat with transcription button — available for ALL completed transcriptions */}
+          {tx.status === "completed" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-blue-500/10 border-blue-500/30 text-blue-600 hover:bg-blue-500/20"
+              onClick={() => router.push(`/chat?transcriptionId=${tx.id}`)}
+            >
+              <FileText className="w-4 h-4 mr-1" /> Чат з транскрипцією
             </Button>
           )}
+
           <Button variant="destructive" size="sm" onClick={() => {
             if (confirm("Видалити транскрипцію?")) deleteMutation.mutate();
           }} disabled={deleteMutation.isPending}>
@@ -285,14 +276,6 @@ useEffect(() => {
               <div><span className="text-muted-foreground">Обробка</span><p className="font-medium">{formatDuration(tx.processing_time_seconds)}</p></div>
             )}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Add to Project */}
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><FolderOpen className="w-5 h-5" /> Проект</CardTitle></CardHeader>
-        <CardContent>
-          <ProjectAssigner transcriptionId={Number(id)} currentProjectId={tx.project_id} workspaceId={tx.workspace_id} />
         </CardContent>
       </Card>
 
@@ -381,12 +364,7 @@ useEffect(() => {
               </TabsList>
               <TabsContent value="text" className="mt-4">
                 <div className="prose prose-sm max-w-none whitespace-pre-wrap bg-muted/30 rounded-lg p-4 max-h-[600px] overflow-y-auto">
-                  {isLoadingText ? (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Завантаження повного тексту...
-                    </div>
-                  ) : (fullText || tx.transcript_text || "Текст не знайдено")}
-
+                  {tx.transcript_text || "Завантажте повний текст через кнопку TXT"}
                 </div>
               </TabsContent>
               {tx.summary && (
@@ -399,16 +377,6 @@ useEffect(() => {
             </Tabs>
           </CardContent>
         </Card>
-      )}
-
-      {/* Comments */}
-      {tx.status === "completed" && appUser && (
-        <TranscriptComments
-          transcriptionId={String(tx.id)}
-          currentUserId={String(appUser.id)}
-          currentUserName={appUser.name || ""}
-          currentUserEmail={appUser.email || ""}
-        />
       )}
 
       {/* Error */}
@@ -439,61 +407,6 @@ useEffect(() => {
             </Button>
           </CardContent>
         </Card>
-      )}
-    </div>
-  );
-}
-
-// ============ Project Assigner ============
-
-function ProjectAssigner({ transcriptionId, currentProjectId, workspaceId }: { transcriptionId: number; currentProjectId: number | null; workspaceId: number }) {
-  const queryClient = useQueryClient();
-
-  const projectsQuery = useQuery({
-    queryKey: ["projects-list", workspaceId],
-    queryFn: async () => {
-      const res = await fetch(`/api/data/projects?workspace_id=${workspaceId || 0}`, { credentials: "include" });
-      return res.json();
-    },
-    enabled: !!workspaceId,
-  });
-
-  const projects = Array.isArray(projectsQuery.data?.data) ? projectsQuery.data.data : [];
-  const currentProject = projects.find((p: any) => p.id === currentProjectId);
-
-  const handleAssign = async (projectId: string) => {
-    try {
-      const res = await fetch("/api/projects/assign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ transcriptionId, projectId: projectId === "none" ? null : Number(projectId) }),
-      });
-      if (res.ok) {
-        toast.success(projectId === "none" ? "Видалено з проекту" : "Додано до проекту");
-        queryClient.invalidateQueries({ queryKey: ["transcription"] });
-      }
-    } catch {
-      toast.error("Помилка");
-    }
-  };
-
-  return (
-    <div className="space-y-2">
-      {currentProject ? (
-        <div className="flex items-center justify-between">
-          <span className="text-sm">Проект: <strong>{currentProject.name}</strong></span>
-          <Button variant="outline" size="sm" onClick={() => handleAssign("none")}>Видалити</Button>
-        </div>
-      ) : (
-        <Select onValueChange={handleAssign}>
-          <SelectTrigger><SelectValue placeholder="Додати до проекту..." /></SelectTrigger>
-          <SelectContent>
-            {projects.map((p: any) => (
-              <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       )}
     </div>
   );
