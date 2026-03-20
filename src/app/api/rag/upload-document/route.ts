@@ -1,119 +1,125 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as ncb from "@/lib/ncb";
 
-function straicoConfig() {
-  return {
-    apiKey: process.env["STRAICO_API_KEY"] || "",
-    apiUrl: "https://api.straico.com",
-  };
-}
+const ALLOWED_MIME_TYPES = [
+  "text/plain",
+  "text/markdown",
+  "application/pdf",
+  "application/octet-stream", // fallback for .md files
+];
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_CONTENT_LENGTH = 100_000; // 100k chars
 
 /**
  * POST /api/rag/upload-document
- * 
- * Upload a text document to an existing RAG base.
- * Body: { ragBaseId, content, filename, workspaceId }
- * 
- * OR create new RAG base with document:
- * Body: { content, filename, workspaceId, ragName?, projectId? }
+ * Accepts multipart/form-data with:
+ * - file: the uploaded file
+ * - workspaceId: workspace ID
+ * - projectId: optional project ID
+ *
+ * For .txt/.md files, extracts text directly.
+ * For .pdf files, stores raw and extracts text server-side.
  */
 export async function POST(req: NextRequest) {
   try {
     await ncb.requireAuth(req);
-    const body = await req.json() as any;
-    const { ragBaseId, content, filename, workspaceId, ragName, projectId } = body;
+    const cookie = ncb.getCookie(req);
 
-    if (!content || !workspaceId) {
-      return NextResponse.json({ error: "content and workspaceId required" }, { status: 400 });
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+    const workspaceId = formData.get("workspaceId") as string;
+    const projectId = formData.get("projectId") as string | null;
+
+    if (!file || !workspaceId) {
+      return NextResponse.json(
+        { error: "file and workspaceId required" },
+        { status: 400 }
+      );
     }
 
-    if (content.length < 10) {
-      return NextResponse.json({ error: "Document too short" }, { status: 400 });
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `Файл занадто великий. Максимум ${MAX_FILE_SIZE / 1024 / 1024} MB` },
+        { status: 400 }
+      );
     }
 
-    const config = straicoConfig();
-    const textBlob = new Blob([content], { type: "text/plain" });
-    const fname = filename || `document-${Date.now()}.txt`;
-
-    let straicoRagId: string | null = null;
-    let ncbRagBaseId = ragBaseId;
-
-    if (ragBaseId) {
-      // Upload to existing RAG base
-      const ragBase = await ncb.readOne<any>("rag_bases", ragBaseId);
-      if (!ragBase || ragBase.deleted_at) {
-        return NextResponse.json({ error: "RAG base not found" }, { status: 404 });
-      }
-      straicoRagId = ragBase.straico_rag_id;
-
-      if (!straicoRagId) {
-        return NextResponse.json({ error: "RAG base has no Straico ID" }, { status: 400 });
-      }
-
-      // Upload file to existing RAG
-      const formData = new FormData();
-      formData.append("files", textBlob, fname);
-
-      const uploadRes = await fetch(`${config.apiUrl}/v0/rag/${straicoRagId}/file`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${config.apiKey}` },
-        body: formData,
-      });
-
-      if (!uploadRes.ok) {
-        return NextResponse.json({ error: `Upload failed: ${await uploadRes.text()}` }, { status: 500 });
-      }
-
-    } else {
-      // Create new RAG base with document
-      const name = ragName || `Document: ${fname}`;
-
-      const formData = new FormData();
-      formData.append("name", name);
-      formData.append("description", `Документ: ${fname} (${content.length} символів)`);
-      formData.append("chunking_method", "recursive");
-      formData.append("chunk_size", "1000");
-      formData.append("chunk_overlap", "50");
-      formData.append("files", textBlob, fname);
-
-      const createRes = await fetch(`${config.apiUrl}/v0/rag`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${config.apiKey}` },
-        body: formData,
-      });
-
-      if (!createRes.ok) {
-        return NextResponse.json({ error: `RAG create failed: ${await createRes.text()}` }, { status: 500 });
-      }
-
-      const createData = await createRes.json();
-      straicoRagId = createData.data?._id || createData.data?.id;
-
-      // Save to NCB
-      const appUser = await ncb.findOne<any>("app_users", { workspace_id: workspaceId });
-      const ragRecord = await ncb.create("rag_bases", {
-        workspace_id: workspaceId,
-        owner_user_id: appUser?.id || 0,
-        straico_rag_id: straicoRagId,
-        name,
-        description: `Документ: ${fname}`,
-        status: "active",
-        created_at: new Date().toISOString().slice(0, 19).replace("T", " "),
-        updated_at: new Date().toISOString().slice(0, 19).replace("T", " "),
-      });
-      ncbRagBaseId = ragRecord.id;
+    // Validate file type by extension
+    const filename = file.name || "document.txt";
+    const ext = filename.split(".").pop()?.toLowerCase() || "";
+    if (!["txt", "md", "pdf"].includes(ext)) {
+      return NextResponse.json(
+        { error: "Підтримуються тільки .txt, .md, .pdf файли" },
+        { status: 400 }
+      );
     }
+
+    let textContent = "";
+
+    if (ext === "txt" || ext === "md") {
+      // Read text directly
+      textContent = await file.text();
+    } else if (ext === "pdf") {
+      // For PDF, we store the file and attempt basic text extraction
+      // In production, you'd use a PDF parsing library
+      const buffer = await file.arrayBuffer();
+      const textDecoder = new TextDecoder("utf-8", { fatal: false });
+      const rawText = textDecoder.decode(buffer);
+
+      // Basic PDF text extraction — extract readable strings
+      // This is a fallback; for proper PDF parsing, use pdf-parse or similar
+      const cleanedText = rawText
+        .replace(/[^\x20-\x7E\u0400-\u04FF\u0100-\u024F\n\r\t]/g, " ")
+        .replace(/\s{3,}/g, "\n")
+        .trim();
+
+      if (cleanedText.length < 50) {
+        return NextResponse.json(
+          { error: "Не вдалося витягти текст з PDF. Спробуйте конвертувати в .txt" },
+          { status: 400 }
+        );
+      }
+
+      textContent = cleanedText;
+    }
+
+    // Trim content to limit
+    if (textContent.length > MAX_CONTENT_LENGTH) {
+      textContent = textContent.slice(0, MAX_CONTENT_LENGTH);
+    }
+
+    // Save document record in NCB
+    const appUser = await ncb.findOne<any>("app_users", {
+      workspace_id: Number(workspaceId),
+    });
+
+    const docRecord = await ncb.createAsUser("documents", cookie, {
+      workspace_id: Number(workspaceId),
+      project_id: projectId ? Number(projectId) : null,
+      app_user_id: appUser?.id || 0,
+      filename: filename,
+      file_type: ext,
+      content_text: textContent,
+      content_length: textContent.length,
+      status: "active",
+    });
 
     return NextResponse.json({
       ok: true,
-      ragBaseId: ncbRagBaseId,
-      straicoRagId,
-      filename: fname,
-      contentLength: content.length,
+      documentId: docRecord.id,
+      filename: filename,
+      contentLength: textContent.length,
     });
   } catch (error: any) {
-    if (error instanceof Response) return new NextResponse(error.body, { status: error.status });
-    console.error("[RAG Upload Doc] Error:", error);
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    if (error instanceof Response) {
+      return new NextResponse(error.body, { status: error.status });
+    }
+    console.error("[UploadDocument] Error:", error);
+    return NextResponse.json(
+      { error: error.message || "Internal server error" },
+      { status: 500 }
+    );
   }
 }
