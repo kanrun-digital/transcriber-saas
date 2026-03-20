@@ -28,9 +28,45 @@ export async function listMessages(conversationId: number): Promise<PaginatedRes
   });
 }
 
+/**
+ * Send a chat message with optional transcription context.
+ * Uses /api/chat which now supports transcriptionId.
+ */
+export async function sendChatMessage(params: {
+  workspaceId: number;
+  message: string;
+  conversationId?: number;
+  model?: string;
+  transcriptionId?: number;
+  systemPrompt?: string;
+}): Promise<{
+  answer: string;
+  conversationId: number;
+  coinsUsed: number;
+  transcriptionTitle?: string;
+}> {
+  return apiPost("/api/chat", {
+    workspaceId: params.workspaceId,
+    message: params.message,
+    conversationId: params.conversationId,
+    model: params.model,
+    transcriptionId: params.transcriptionId,
+    systemPrompt: params.systemPrompt,
+  });
+}
+
+/**
+ * Fetch a transcription record for chat context display.
+ */
+export async function getTranscriptionForChat(transcriptionId: number): Promise<any> {
+  return apiGet(API_ROUTES.DATA_RECORD("transcriptions", transcriptionId));
+}
+
 export const chatService = {
   queryRag,
   listConversations,
   getConversation,
   listMessages,
+  sendChatMessage,
+  getTranscriptionForChat,
 };
