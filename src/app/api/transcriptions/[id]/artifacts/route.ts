@@ -24,10 +24,17 @@ export async function GET(
     const wsId = String(tx.workspace_id);
     const expiresIn = 3600;
 
+    // Parse metadata_json for jsonS3Key (YouTube stores it there)
+    let jsonS3Key: string | null = null;
+    try {
+      const meta = typeof tx.metadata_json === "string" ? JSON.parse(tx.metadata_json) : tx.metadata_json;
+      if (meta?.jsonS3Key) jsonS3Key = meta.jsonS3Key;
+    } catch {}
+
     const [textUrl, jsonUrl, srtUrl] = await Promise.all([
       tx.transcript_text_url ? getDownloadUrl(tx.transcript_text_url, expiresIn) : null,
-      tx.transcript_json_url ? getDownloadUrl(tx.transcript_json_url, expiresIn) : null,
-      tx.srt_url ? getDownloadUrl(tx.srt_url, expiresIn) : null,
+      (tx.transcript_json_url || jsonS3Key) ? getDownloadUrl(tx.transcript_json_url || jsonS3Key, expiresIn) : null,
+      (tx.srt_content_url || tx.srt_url) ? getDownloadUrl(tx.srt_content_url || tx.srt_url, expiresIn) : null,
     ]);
 
     return NextResponse.json({ textUrl, jsonUrl, srtUrl, expiresIn });
