@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
     const srtS3Key = buildSrtKey(workspaceId, tempId);
 
     await Promise.all([
-      uploadText(textS3Key, timestampedText),
+      uploadText(textS3Key, fullText),
       uploadJson(jsonS3Key, jsonTranscript),
       uploadText(srtS3Key, srtContent),
     ]);
