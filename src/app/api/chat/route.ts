@@ -5,6 +5,7 @@ import { checkStraicoLimit, recordStraicoUsage, getWorkspaceLimits } from "@/lib
 
 const DEFAULT_MAX_CHARS = 24000;
 const DEFAULT_MAX_MESSAGES = 30;
+const TRANSCRIPTION_CONTEXT_LIMIT = 15000;
 
 function trimHistory(
   history: Array<{ role: string; content: string }>,
@@ -33,6 +34,27 @@ async function generateTitle(message: string, model: string): Promise<string> {
     return title.slice(0, 100).trim();
   } catch {
     return message.slice(0, 80);
+  }
+}
+
+/**
+ * Fetch transcription text from NCB and return trimmed context
+ */
+async function fetchTranscriptionContext(transcriptionId: number): Promise<{
+  text: string;
+  title: string;
+} | null> {
+  try {
+    const tx = await ncb.readOne<any>("transcriptions", transcriptionId);
+    if (!tx || tx.deleted_at || tx.status !== "completed") {
+      return null;
+    }
+    const transcriptText = tx.transcript_text || "";
+    const trimmedText = transcriptText.slice(0, TRANSCRIPTION_CONTEXT_LIMIT);
+    const title = tx.original_filename || `Транскрипція #${tx.id}`;
+    return { text: trimmedText, title };
+  } catch {
+    return null;
   }
 }
 
@@ -67,15 +89,16 @@ export async function POST(req: NextRequest) {
       }
     } catch {}
 
-    // If transcriptionId provided — load transcript text as context
-    let transcriptContext: string | null = null;
+    // Fetch transcription context if transcriptionId provided
+    let transcriptionContext: { text: string; title: string } | null = null;
     if (transcriptionId) {
-      try {
-        const tx = await ncb.readOne<any>("transcriptions", transcriptionId);
-        if (tx?.transcript_text) {
-          transcriptContext = tx.transcript_text;
-        }
-      } catch {}
+      transcriptionContext = await fetchTranscriptionContext(Number(transcriptionId));
+      if (!transcriptionContext) {
+        return NextResponse.json(
+          { error: "Транскрипцію не знайдено або вона ще не завершена" },
+          { status: 404 }
+        );
+      }
     }
 
     let convId = conversationId;
@@ -100,10 +123,25 @@ export async function POST(req: NextRequest) {
     } else {
       isNewConversation = true;
       const appUser = await ncb.findOne<any>("app_users", { workspace_id: workspaceId });
+
+      // Build conversation title and metadata
+      const convTitle = transcriptionContext
+        ? `📝 ${transcriptionContext.title.slice(0, 60)}`
+        : message.slice(0, 80);
+
+      const metadataJson: Record<string, any> = {};
+      if (transcriptionId) {
+        metadataJson.transcription_id = Number(transcriptionId);
+        metadataJson.chat_type = "transcription";
+      } else {
+        metadataJson.chat_type = "simple";
+      }
+
       const conv = await ncb.createAsUser("conversations", cookie, {
         workspace_id: workspaceId,
         owner_user_id: appUser?.id || 0,
-        title: message.slice(0, 80),
+        title: convTitle,
+        metadata_json: JSON.stringify(metadataJson),
       });
       convId = conv.id;
     }
@@ -115,15 +153,25 @@ export async function POST(req: NextRequest) {
     });
 
     const trimmedHistory = trimHistory(history, maxChars, maxMessages);
+
+    // Build messages array
     const allMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
 
-    // Add transcript context as system prompt
-    if (transcriptContext) {
-      const contextPrompt = `Ти — AI асистент для аналізу транскрипцій. Нижче наданий текст транскрипції. Відповідай на питання українською мовою, базуючись на цьому тексті. Якщо відповіді немає в тексті — скажи про це.\n\n--- ТРАНСКРИПЦІЯ ---\n${transcriptContext.substring(0, 15000)}\n--- КІНЕЦЬ ТРАНСКРИПЦІЇ ---`;
+    // Add transcription context as system prompt if available
+    if (transcriptionContext) {
+      const contextPrompt = [
+        "Ти — AI-асистент, який допомагає аналізувати транскрипцію.",
+        `Назва файлу: ${transcriptionContext.title}`,
+        "",
+        "Текст транскрипції:",
+        "---",
+        transcriptionContext.text,
+        "---",
+        "",
+        "Відповідай на питання користувача на основі цієї транскрипції. Якщо питання не стосується транскрипції, все одно відповідай, але вказуй що це за межами наданого контексту.",
+      ].join("\n");
       allMessages.push({ role: "system", content: contextPrompt });
-    }
-
-    if (systemPrompt && !transcriptContext) {
+    } else if (systemPrompt) {
       allMessages.push({ role: "system", content: systemPrompt });
     }
 
@@ -138,7 +186,7 @@ export async function POST(req: NextRequest) {
       content_text: answer,
     });
 
-    if (isNewConversation) {
+    if (isNewConversation && !transcriptionContext) {
       generateTitle(message, selectedModel).then(async (title: any) => {
         try { await ncb.update("conversations", convId, { title }); } catch {}
       });
@@ -150,7 +198,12 @@ export async function POST(req: NextRequest) {
       await recordStraicoUsage(workspaceId, appUser?.id || null, estimatedCoins, "chat", convId);
     } catch {}
 
-    return NextResponse.json({ answer, conversationId: convId, coinsUsed: estimatedCoins });
+    return NextResponse.json({
+      answer,
+      conversationId: convId,
+      coinsUsed: estimatedCoins,
+      transcriptionTitle: transcriptionContext?.title || null,
+    });
   } catch (error: any) {
     if (error instanceof Response) return new NextResponse(error.body, { status: error.status });
     console.error("[Chat] Error:", error);
